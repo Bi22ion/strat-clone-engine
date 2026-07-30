@@ -1,0 +1,22 @@
+{
+  "name": "strat-clone-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Strat-Clone Engine - Multi-tenant automated trading SaaS",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\" \"npm run dev:worker\"",
+    "dev:web": "npm run dev --prefix web",
+    "dev:server": "npm run dev --prefix server",
+    "dev:worker": "npm run dev --prefix worker",
+    "build": "npm run build --prefix web && npm run build --prefix server",
+    "start": "concurrently \"npm run start --prefix server\" \"npm run start --prefix web\"",
+    "install:all": "npm install && npm install --prefix web && npm install --prefix server && npm install --prefix worker"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "eslint": "^10.8.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.6"
+  }
+}

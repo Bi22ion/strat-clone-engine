@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-zinc-100 antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface border border-border rounded-xl p-6 transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:border-zinc-700 hover:shadow-lg hover:shadow-black/20;
+  }
+
+  .btn-primary {
+    @apply bg-accent-cyan hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-success {
+    @apply bg-accent-green hover:bg-emerald-500 text-white font-medium px-5 py-2.5 rounded-lg transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-accent-red hover:bg-red-600 text-white font-medium px-5 py-2.5 rounded-lg transition-all duration-200;
+  }
+
+  .btn-ghost {
+    @apply text-zinc-400 hover:text-white hover:bg-surface-hover px-4 py-2 rounded-lg transition-all duration-200;
+  }
+
+  .input-field {
+    @apply w-full bg-zinc-900 border border-border rounded-lg px-4 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all duration-200;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-zinc-400 mb-1.5;
+  }
+
+  .mono-data {
+    @apply font-mono text-sm tabular-nums;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .status-active {
+    @apply status-badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/20;
+  }
+
+  .status-inactive {
+    @apply status-badge bg-zinc-500/10 text-zinc-400 border border-zinc-500/20;
+  }
+
+  .status-error {
+    @apply status-badge bg-red-500/10 text-red-400 border border-red-500/20;
+  }
+
+  .pulse-dot-green {
+    @apply w-2 h-2 rounded-full bg-emerald-400 animate-pulse;
+  }
+
+  .pulse-dot-red {
+    @apply w-2 h-2 rounded-full bg-red-400 animate-pulse;
+  }
+
+  .skeleton {
+    @apply animate-pulse bg-zinc-800 rounded;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 bg-clip-text text-transparent;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #18181b;
+}
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
