@@ -9,7 +9,7 @@ const router = Router();
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, broker_name, is_active, connection_status
+      `SELECT id, broker_name, is_paper_trading, is_active, connection_status, last_tested_at, created_at, updated_at
        FROM broker_credentials WHERE user_id = $1`,
       [req.user.id]
     ).catch(() => ({ rows: [] }));
@@ -21,7 +21,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { apiKey, apiSecret, brokerName = 'alpaca' } = req.body;
+    const { apiKey, apiSecret, brokerName = 'alpaca', isPaperTrading = true } = req.body;
     if (!apiKey || !apiSecret) {
       return res.status(400).json({ error: 'API key and secret are required' });
     }
@@ -30,11 +30,21 @@ router.post('/', authMiddleware, async (req, res) => {
     const encryptedSecret = encrypt(apiSecret);
 
     const result = await query(
-      `INSERT INTO broker_credentials (user_id, broker_name, api_key_encrypted, api_secret_encrypted, is_active)
-       VALUES ($1, $2, $3, $4, true)
-       RETURNING id, broker_name, is_active, connection_status`,
-      [req.user.id, brokerName, encryptedKey, encryptedSecret]
-    );
+      `INSERT INTO broker_credentials (user_id, broker_name, api_key_encrypted, api_secret_encrypted, is_paper_trading, is_active)
+       VALUES ($1, $2, $3, $4, $5, true)
+       ON CONFLICT (user_id, broker_name)
+       DO UPDATE SET api_key_encrypted = $3, api_secret_encrypted = $4, is_paper_trading = $5, is_active = true, updated_at = NOW()
+       RETURNING id, broker_name, is_paper_trading, is_active, connection_status, created_at`,
+      [req.user.id, brokerName, encryptedKey, encryptedSecret, isPaperTrading]
+    ).catch(async () => {
+      // Fallback query if ON CONFLICT or specific columns fail due to schema mismatches
+      return await query(
+        `INSERT INTO broker_credentials (user_id, broker_name, api_key_encrypted, api_secret_encrypted, is_active)
+         VALUES ($1, $2, $3, $4, true)
+         RETURNING id, broker_name, is_active, connection_status, created_at`,
+        [req.user.id, brokerName, encryptedKey, encryptedSecret]
+      );
+    });
 
     res.status(201).json({ credentials: result.rows[0] });
   } catch (err) {
@@ -46,12 +56,20 @@ router.post('/', authMiddleware, async (req, res) => {
 router.post('/test', authMiddleware, async (req, res) => {
   try {
     const result = await query(
-      'SELECT * FROM broker_credentials WHERE user_id = $1 LIMIT 1',
+      'SELECT * FROM broker_credentials WHERE user_id = $1 AND is_active = true LIMIT 1',
       [req.user.id]
     ).catch(() => ({ rows: [] }));
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No broker credentials found' });
+      const fallbackResult = await query(
+        'SELECT * FROM broker_credentials WHERE user_id = $1 LIMIT 1',
+        [req.user.id]
+      ).catch(() => ({ rows: [] }));
+
+      if (fallbackResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No active broker credentials found' });
+      }
+      result.rows = fallbackResult.rows;
     }
 
     let testResult = { connected: true };
@@ -64,9 +82,14 @@ router.post('/test', authMiddleware, async (req, res) => {
     const status = testResult.connected ? 'connected' : 'failed';
 
     await query(
-      `UPDATE broker_credentials SET connection_status = $1 WHERE id = $2`,
+      `UPDATE broker_credentials SET connection_status = $1, last_tested_at = NOW() WHERE id = $2`,
       [status, result.rows[0].id]
-    ).catch(() => {});
+    ).catch(async () => {
+      await query(
+        `UPDATE broker_credentials SET connection_status = $1 WHERE id = $2`,
+        [status, result.rows[0].id]
+      ).catch(() => {});
+    });
 
     res.json({ ...testResult, connection_status: status });
   } catch (err) {
@@ -76,10 +99,27 @@ router.post('/test', authMiddleware, async (req, res) => {
 
 router.patch('/paper-trading', authMiddleware, async (req, res) => {
   try {
-    res.json({ success: true });
+    const { isPaperTrading } = req.body;
+    const result = await query(
+      `UPDATE broker_credentials SET is_paper_trading = $1 WHERE user_id = $2 AND is_active = true
+       RETURNING id, is_paper_trading`,
+      [isPaperTrading, req.user.id]
+    ).catch(async () => {
+      return await query(
+        `UPDATE broker_credentials SET is_paper_trading = $1 WHERE user_id = $2
+         RETURNING id, is_paper_trading`,
+        [isPaperTrading, req.user.id]
+      );
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No active credentials found' });
+    }
+    res.json({ credentials: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update setting' });
+    res.status(500).json({ error: 'Failed to update paper trading setting' });
   }
 });
 
-export default router[cite: 3];
+export default router;
+```[cite: 3, 6]
