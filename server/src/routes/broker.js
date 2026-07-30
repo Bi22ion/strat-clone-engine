@@ -37,7 +37,6 @@ router.post('/', authMiddleware, async (req, res) => {
        RETURNING id, broker_name, is_paper_trading, is_active, connection_status, created_at`,
       [req.user.id, brokerName, encryptedKey, encryptedSecret, isPaperTrading]
     ).catch(async () => {
-      // Fallback query if ON CONFLICT or specific columns fail due to schema mismatches
       return await query(
         `INSERT INTO broker_credentials (user_id, broker_name, api_key_encrypted, api_secret_encrypted, is_active)
          VALUES ($1, $2, $3, $4, true)
@@ -122,4 +121,3 @@ router.patch('/paper-trading', authMiddleware, async (req, res) => {
 });
 
 export default router;
-```[cite: 3, 6]
