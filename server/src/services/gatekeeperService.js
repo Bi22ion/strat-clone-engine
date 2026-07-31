@@ -76,6 +76,18 @@ export async function ensureGatekeeperSchema() {
   `).catch(() => {});
 
   await query(`
+    CREATE TABLE IF NOT EXISTS gatekeeper_admin_status (
+      user_id UUID NOT NULL UNIQUE,
+      email TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'approved' CHECK (status IN ('pending','approved','revoked')),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
+
+  // Backfill approval_status column on roles if missing (idempotent)
+  await query(`ALTER TABLE gatekeeper_roles ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'`).catch(() => {});
+
+  await query(`
     CREATE OR REPLACE FUNCTION gatekeeper_touch_updated_at()
     RETURNS TRIGGER AS $$
     BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
@@ -127,6 +139,12 @@ export async function seedDefaultProfile(userId, displayName, email) {
   await query(
     `INSERT INTO gatekeeper_roles (user_id, role) VALUES ($1, 'trader') ON CONFLICT (user_id) DO NOTHING`,
     [userId]
+  ).catch(() => {});
+
+  await query(
+    `INSERT INTO gatekeeper_admin_status (user_id, email, status) VALUES ($1, $2, 'approved')
+     ON CONFLICT (user_id) DO NOTHING`,
+    [userId, email || '']
   ).catch(() => {});
 
   await query(

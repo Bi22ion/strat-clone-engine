@@ -292,7 +292,14 @@ export interface GatekeeperProfileData {
   blocks: GatekeeperBlock[];
 }
 
+export interface GatekeeperApprovalState {
+  role: string;
+  approvalStatus: 'pending' | 'approved' | 'revoked';
+  email: string;
+}
+
 export const gatekeeper = {
+  getStatus: () => api<GatekeeperApprovalState>('/gatekeeper/status'),
   getProfile: () => api<GatekeeperProfileData>('/gatekeeper/profile'),
   updateProfile: (data: Partial<GatekeeperProfile> & { social_links?: Record<string, string>; theme?: GatekeeperTheme }) =>
     api<{ profile: GatekeeperProfile }>('/gatekeeper/profile', {

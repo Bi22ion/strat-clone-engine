@@ -23,6 +23,22 @@ function parseJsonField(value, fallback) {
   return value;
 }
 
+// GET /api/gatekeeper/status — current user's approval status + role
+router.get('/status', authMiddleware, async (req, res) => {
+  try {
+    await ensureGatekeeperSchema();
+    const roleRes = await query('SELECT role FROM gatekeeper_roles WHERE user_id = $1', [req.user.id]).catch(() => ({ rows: [] }));
+    const statusRes = await query('SELECT status, email FROM gatekeeper_admin_status WHERE user_id = $1', [req.user.id]).catch(() => ({ rows: [] }));
+    res.json({
+      role: roleRes.rows[0]?.role || 'trader',
+      approvalStatus: statusRes.rows[0]?.status || 'approved',
+      email: statusRes.rows[0]?.email || req.user.email,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load status' });
+  }
+});
+
 // GET /api/gatekeeper/profile — current user's profile + blocks
 router.get('/profile', authMiddleware, async (req, res) => {
   try {
