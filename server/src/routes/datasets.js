@@ -66,12 +66,23 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
       [req.user.id, name || req.file.originalname, req.file.originalname, req.file.path]
     ).catch(() => ({ rows: [{ id: 1, name: name || req.file.originalname, status: 'uploaded' }] }));
 
-    let preview = { headers: [], rows: [] };
+    let rawPreview = { headers: [], rows: [] };
     try {
-      preview = getDatasetPreview(req.file.path);
+      rawPreview = getDatasetPreview(req.file.path);
     } catch (e) {
       // ignore preview errors
     }
+
+    // Normalize preview structure to support both keys
+    const headers = rawPreview.headers || rawPreview.columns || [];
+    const rows = rawPreview.rows || rawPreview.preview || [];
+    const preview = {
+      columns: headers,
+      headers: headers,
+      preview: rows,
+      rows: rows,
+      totalRows: rawPreview.totalRows || rows.length
+    };
 
     res.status(201).json({ dataset: result.rows[0], preview });
   } catch (err) {
@@ -91,14 +102,25 @@ router.get('/:id/preview', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Dataset not found' });
     }
     const dataset = result.rows[0];
-    let preview = { headers: [], rows: [] };
+    let rawPreview = { headers: [], rows: [] };
     try {
       if (dataset.file_path) {
-        preview = getDatasetPreview(dataset.file_path);
+        rawPreview = getDatasetPreview(dataset.file_path);
       }
     } catch (e) {
       // ignore preview errors
     }
+
+    const headers = rawPreview.headers || rawPreview.columns || [];
+    const rows = rawPreview.rows || rawPreview.preview || [];
+    const preview = {
+      columns: headers,
+      headers: headers,
+      preview: rows,
+      rows: rows,
+      totalRows: rawPreview.totalRows || rows.length
+    };
+
     res.json({ dataset, preview });
   } catch (err) {
     res.status(500).json({ error: 'Failed to get preview' });
