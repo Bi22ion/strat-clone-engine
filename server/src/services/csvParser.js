@@ -31,7 +31,7 @@ function calculateDurationMinutes(entry, exit) {
 export async function parseAndIngestDataset(datasetId, userId, filePath, columnMapping) {
   const fileContent = fs.readFileSync(filePath, 'utf8');
   const records = parse(fileContent, {
-    columns: true,
+    columns: (header) => header.map(h => String(h).replace(/^\uFEFF/, '').trim()),
     skip_empty_lines: true,
     trim: true,
     relax_column_count: true,
@@ -118,11 +118,19 @@ export async function parseAndIngestDataset(datasetId, userId, filePath, columnM
 export async function getDatasetPreview(filePath, maxRows = 5) {
   const fileContent = fs.readFileSync(filePath, 'utf8');
   const records = parse(fileContent, {
-    columns: true,
+    columns: (header) => header.map(h => String(h).replace(/^\uFEFF/, '').trim()),
     skip_empty_lines: true,
     trim: true,
     relax_column_count: true,
   });
   const columns = records.length > 0 ? Object.keys(records[0]) : [];
-  return { columns, preview: records.slice(0, maxRows), totalRows: records.length };
+  const previewRows = records.slice(0, maxRows);
+  
+  return { 
+    columns, 
+    headers: columns, 
+    preview: previewRows, 
+    rows: previewRows, 
+    totalRows: records.length 
+  };
 }
