@@ -64,26 +64,14 @@ export const datasets = {
     form.append('file', file);
     if (name) form.append('name', name);
     
-    const res = await api<{ dataset: Dataset; preview: DatasetPreview }>('/datasets/upload', {
+    return api<{ dataset: Dataset; preview: DatasetPreview }>('/datasets/upload', {
       method: 'POST',
       body: form,
     });
-    
-    // Safety check to ensure preview and columns always exist
-    if (res && res.preview && !res.preview.columns && res.preview.headers) {
-      res.preview.columns = res.preview.headers;
-    }
-    
-    return res;
   },
 
-  preview: async (id: string) => {
-    const res = await api<{ dataset: Dataset; preview: DatasetPreview }>(`/datasets/${id}/preview`);
-    if (res && res.preview && !res.preview.columns && res.preview.headers) {
-      res.preview.columns = res.preview.headers;
-    }
-    return res;
-  },
+  preview: (id: string) =>
+    api<{ dataset: Dataset; preview: DatasetPreview }>(`/datasets/${id}/preview`),
 
   parse: (id: string, columnMapping: ColumnMapping) =>
     api<{ dataset: Dataset; parseResult: ParseResult }>(`/datasets/${id}/parse`, {
@@ -94,7 +82,6 @@ export const datasets = {
   delete: (id: string) =>
     api<{ success: boolean }>(`/datasets/${id}`, { method: 'DELETE' }),
 };
-
 export const models = {
   list: () => api<{ models: StrategyModel[] }>('/models'),
   get: (id: string) => api<{ model: StrategyModel }>(`/models/${id}`),
