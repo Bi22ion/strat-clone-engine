@@ -40,7 +40,9 @@ export default function DatasetsPage() {
 
   const loadDatasets = useCallback(async () => {
     try {
-      const { datasets: list } = await datasets.list();
+      const res = await datasets.list();
+      // Handle both { datasets: [...] } and direct array responses safely
+      const list = Array.isArray(res) ? res : (res?.datasets || []);
       setDatasetList(list);
     } catch {
       toast.error('Failed to load datasets');
@@ -189,7 +191,7 @@ export default function DatasetsPage() {
                   onChange={(e) => setColumnMapping({ ...columnMapping, [field]: e.target.value })}
                 >
                   <option value="">— Select column —</option>
-                  {preview.columns.map((col) => (
+                  {preview.columns?.map((col) => (
                     <option key={col} value={col}>{col}</option>
                   ))}
                 </select>
@@ -197,12 +199,12 @@ export default function DatasetsPage() {
             ))}
           </div>
 
-          {preview.preview.length > 0 && (
+          {preview.preview && preview.preview.length > 0 && (
             <div className="overflow-x-auto mb-6">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    {preview.columns.map((col) => (
+                    {preview.columns?.map((col) => (
                       <th key={col} className="text-left py-2 px-3 text-zinc-400 font-medium">{col}</th>
                     ))}
                   </tr>
@@ -210,7 +212,7 @@ export default function DatasetsPage() {
                 <tbody>
                   {preview.preview.slice(0, 3).map((row, i) => (
                     <tr key={i} className="border-b border-border/50">
-                      {preview.columns.map((col) => (
+                      {preview.columns?.map((col) => (
                         <td key={col} className="py-2 px-3 mono-data text-zinc-300">{row[col]}</td>
                       ))}
                     </tr>
@@ -237,7 +239,7 @@ export default function DatasetsPage() {
           <div className="space-y-3">
             {[1, 2, 3].map((i) => <div key={i} className="skeleton h-14 w-full" />)}
           </div>
-        ) : datasetList.length === 0 ? (
+        ) : !Array.isArray(datasetList) || datasetList.length === 0 ? (
           <p className="text-zinc-500 text-center py-8">No datasets uploaded yet</p>
         ) : (
           <div className="space-y-2">
