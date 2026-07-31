@@ -1,9 +1,15 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { query } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { ensureGatekeeperSchema, seedDefaultProfile, getProfileWithBlocks } from '../services/gatekeeperService.js';
 
 const router = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 const TIER_PRICES = { free: 0, weekly: 499, monthly: 1499, yearly: 14999 };
 
@@ -235,6 +241,99 @@ router.put('/subscription', authMiddleware, async (req, res) => {
     res.json({ subscription });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update subscription' });
+  }
+});
+
+// GET /api/gatekeeper/messages — owner's inbox
+router.get('/messages', authMiddleware, async (req, res) => {
+  try {
+    await ensureGatekeeperSchema();
+    const profileRes = await query('SELECT id FROM gatekeeper_profiles WHERE owner_id = $1', [req.user.id]).catch(() => ({ rows: [] }));
+    if (profileRes.rows.length === 0) return res.json({ messages: [] });
+    const result = await query(
+      'SELECT * FROM gatekeeper_messages WHERE profile_id = $1 ORDER BY created_at DESC LIMIT 100',
+      [profileRes.rows[0].id]
+    ).catch(() => ({ rows: [] }));
+    res.json({ messages: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load messages' });
+  }
+});
+
+// PUT /api/gatekeeper/messages/:id/read — mark as read
+router.put('/messages/:id/read', authMiddleware, async (req, res) => {
+  try {
+    await query(
+      `UPDATE gatekeeper_messages m SET is_read = true
+       FROM gatekeeper_profiles p WHERE m.id = $1 AND m.profile_id = p.id AND p.owner_id = $2`,
+      [req.params.id, req.user.id]
+    ).catch(() => {});
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// DELETE /api/gatekeeper/messages/:id
+router.delete('/messages/:id', authMiddleware, async (req, res) => {
+  try {
+    await query(
+      `DELETE FROM gatekeeper_messages m
+       USING gatekeeper_profiles p WHERE m.id = $1 AND m.profile_id = p.id AND p.owner_id = $2`,
+      [req.params.id, req.user.id]
+    ).catch(() => {});
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// POST /api/gatekeeper/site/:slug/message — public visitor sends a message (no auth)
+router.post('/site/:slug/message', async (req, res) => {
+  try {
+    await ensureGatekeeperSchema();
+    const { sender_name, sender_email, message, page } = req.body;
+    if (!sender_name || !sender_email || !message) {
+      return res.status(400).json({ error: 'Name, email, and message are required' });
+    }
+    const profileRes = await query(
+      'SELECT id FROM gatekeeper_profiles WHERE slug = $1 AND is_published = true',
+      [req.params.slug]
+    ).catch(() => ({ rows: [] }));
+    if (profileRes.rows.length === 0) return res.status(404).json({ error: 'Site not found' });
+
+    await query(
+      `INSERT INTO gatekeeper_messages (profile_id, sender_name, sender_email, message, page)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [profileRes.rows[0].id, String(sender_name).slice(0, 255), String(sender_email).slice(0, 255), String(message).slice(0, 5000), page || 'contact']
+    );
+    res.status(201).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// POST /api/gatekeeper/media — upload media for a block (drag-drop or click)
+router.post('/media', authMiddleware, upload.single('file'), async (req, res) => {
+  try {
+    await ensureGatekeeperSchema();
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const profileRes = await query('SELECT id FROM gatekeeper_profiles WHERE owner_id = $1', [req.user.id]).catch(() => ({ rows: [] }));
+    if (profileRes.rows.length === 0) return res.status(404).json({ error: 'No profile found' });
+
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    const mediaType = req.file.mimetype.startsWith('video') ? 'video' : 'image';
+
+    const result = await query(
+      `INSERT INTO gatekeeper_media (profile_id, media_type, url, filename)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [profileRes.rows[0].id, mediaType, base64, req.file.originalname]
+    );
+
+    res.status(201).json({ media: result.rows[0], url: base64 });
+  } catch (err) {
+    res.status(500).json({ error: 'Media upload failed' });
   }
 });
 

@@ -324,5 +324,44 @@ export const gatekeeper = {
       method: 'PUT',
       body: JSON.stringify({ tier }),
     }),
+  uploadMedia: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api<{ media: GatekeeperMedia; url: string }>('/gatekeeper/media', {
+      method: 'POST',
+      body: formData,
+    });
+  },
   getSite: (slug: string) => api<GatekeeperProfileData>(`/gatekeeper/site/${slug}`),
+  sendMessage: (slug: string, data: { sender_name: string; sender_email: string; message: string; page?: string }) =>
+    api<{ success: boolean }>(`/gatekeeper/site/${slug}/message`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMessages: () => api<{ messages: GatekeeperMessage[] }>('/gatekeeper/messages'),
+  markMessageRead: (id: string) =>
+    api<{ success: boolean }>(`/gatekeeper/messages/${id}/read`, { method: 'PUT' }),
+  deleteMessage: (id: string) =>
+    api<{ success: boolean }>(`/gatekeeper/messages/${id}`, { method: 'DELETE' }),
 };
+
+export interface GatekeeperMedia {
+  id: string;
+  profile_id: string;
+  block_id: string | null;
+  media_type: string;
+  url: string;
+  filename: string;
+  created_at: string;
+}
+
+export interface GatekeeperMessage {
+  id: string;
+  profile_id: string;
+  sender_name: string;
+  sender_email: string;
+  message: string;
+  page: string;
+  is_read: boolean;
+  created_at: string;
+}

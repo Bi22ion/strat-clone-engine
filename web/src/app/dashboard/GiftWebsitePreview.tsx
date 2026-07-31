@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Globe, Sparkles, ExternalLink, Loader as Loader2, Play, Image as ImageIcon } from 'lucide-react';
+import { Globe, Sparkles, ExternalLink, Loader as Loader2, Play, Image as ImageIcon, Eye, Pencil } from 'lucide-react';
 import { gatekeeper, GatekeeperProfile, GatekeeperBlock } from '@/lib/api';
 
 function parseTheme(profile: GatekeeperProfile): { primary: string; layout: string } {
@@ -31,6 +31,7 @@ export default function GiftWebsitePreview() {
   }, []);
 
   const { primary } = profile ? parseTheme(profile) : { primary: '#10b981' };
+  const slug = profile?.slug || '';
   const heroBlock = blocks.find((b) => b.block_type === 'hero');
   const statsBlock = blocks.find((b) => b.block_type === 'stats');
   const videoBlock = blocks.find((b) => b.block_type === 'video');
@@ -49,12 +50,14 @@ export default function GiftWebsitePreview() {
             <p className="text-xs text-zinc-500">Promote your trades 24/7</p>
           </div>
         </div>
-        <Link
-          href="/gatekeeper"
-          className="text-xs text-accent-cyan hover:underline flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          Customize <ExternalLink className="w-3 h-3" />
-        </Link>
+        {slug && (
+          <Link
+            href={`/${slug}/gatekeeper`}
+            className="text-xs text-accent-cyan hover:underline flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            Customize <ExternalLink className="w-3 h-3" />
+          </Link>
+        )}
       </div>
 
       <div className="rounded-lg border border-border overflow-hidden bg-zinc-950">
@@ -63,7 +66,7 @@ export default function GiftWebsitePreview() {
           <span className="w-2 h-2 rounded-full bg-amber-500/70" />
           <span className="w-2 h-2 rounded-full bg-emerald-500/70" />
           <span className="ml-2 text-[10px] text-zinc-500 font-mono truncate">
-            {profile ? `strat-clone.app/${profile.slug}` : 'loading…'}
+            {slug ? `strat-clone.app/${slug}` : 'loading…'}
           </span>
           {published && (
             <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 flex items-center gap-1">
@@ -81,9 +84,7 @@ export default function GiftWebsitePreview() {
             <div className="text-center py-10 px-4">
               <Globe className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
               <p className="text-sm text-zinc-400">Your gift site is being prepared</p>
-              <Link href="/gatekeeper" className="text-xs text-accent-cyan hover:underline mt-2 inline-block">
-                Set up your profile →
-              </Link>
+              <p className="text-xs text-zinc-500 mt-2">Set up your profile to get started</p>
             </div>
           ) : (
             <div className="p-4">
@@ -101,7 +102,7 @@ export default function GiftWebsitePreview() {
               </div>
 
               {heroBlock && (
-                <p className="text-xs text-zinc-300 mb-3 leading-relaxed">{heroBlock.content}</p>
+                <p className="text-xs text-zinc-300 mb-3 leading-relaxed line-clamp-3">{heroBlock.content}</p>
               )}
 
               {statsBlock && (
@@ -122,7 +123,7 @@ export default function GiftWebsitePreview() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{videoBlock.title}</p>
-                    <p className="text-[10px] text-zinc-500">{videoBlock.content}</p>
+                    <p className="text-[10px] text-zinc-500 line-clamp-1">{videoBlock.content}</p>
                   </div>
                 </div>
               )}
@@ -138,7 +139,7 @@ export default function GiftWebsitePreview() {
 
               {!published && (
                 <p className="text-[10px] text-zinc-500 text-center mt-3 flex items-center justify-center gap-1">
-                  <ImageIcon className="w-3 h-3" /> Draft — publish from the Gatekeeper
+                  <ImageIcon className="w-3 h-3" /> Draft — publish from your studio
                 </p>
               )}
             </div>
@@ -146,12 +147,25 @@ export default function GiftWebsitePreview() {
         </div>
       </div>
 
-      <Link
-        href="/gatekeeper"
-        className="mt-3 flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-accent-cyan transition-colors py-1"
-      >
-        <Sparkles className="w-3.5 h-3.5" /> Open Gatekeeper CMS
-      </Link>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {slug && (
+          <Link
+            href={`/${slug}`}
+            target="_blank"
+            className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-accent-cyan transition-colors py-1.5 rounded-lg border border-border hover:border-accent-cyan/30"
+          >
+            <Eye className="w-3.5 h-3.5" /> View Public Site
+          </Link>
+        )}
+        {slug && (
+          <Link
+            href={`/${slug}/gatekeeper`}
+            className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-accent-green transition-colors py-1.5 rounded-lg border border-border hover:border-accent-green/30"
+          >
+            <Pencil className="w-3.5 h-3.5" /> Open Studio
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

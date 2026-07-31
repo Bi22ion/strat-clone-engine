@@ -67,6 +67,33 @@ export async function ensureGatekeeperSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_gatekeeper_subscriptions_owner ON gatekeeper_subscriptions(owner_id)`).catch(() => {});
 
   await query(`
+    CREATE TABLE IF NOT EXISTS gatekeeper_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      profile_id UUID NOT NULL REFERENCES gatekeeper_profiles(id) ON DELETE CASCADE,
+      sender_name VARCHAR(255) NOT NULL,
+      sender_email VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      page VARCHAR(50) DEFAULT 'contact',
+      is_read BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS idx_gatekeeper_messages_profile ON gatekeeper_messages(profile_id)`).catch(() => {});
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS gatekeeper_media (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      profile_id UUID NOT NULL REFERENCES gatekeeper_profiles(id) ON DELETE CASCADE,
+      block_id UUID REFERENCES gatekeeper_blocks(id) ON DELETE SET NULL,
+      media_type VARCHAR(20) NOT NULL DEFAULT 'image',
+      url TEXT NOT NULL,
+      filename VARCHAR(255),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS idx_gatekeeper_media_profile ON gatekeeper_media(profile_id)`).catch(() => {});
+
+  await query(`
     CREATE TABLE IF NOT EXISTS gatekeeper_roles (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL UNIQUE,
