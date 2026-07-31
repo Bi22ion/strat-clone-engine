@@ -74,12 +74,15 @@ export default function DatasetsPage() {
   }
 
  function autoMapColumns(columns: string[]) {
-    if (!Array.isArray(columns)) return; // <-- Add this safety check
-    const mapping: Partial<ColumnMapping> = {};
-    const lower = columns.map((c) => (c ? c.toLowerCase() : ''));
-    const find = (...terms: string[]) => columns[lower.findIndex((c) => terms.some((t) => c.includes(t)))] || '';
+    // Fallback to ensure we catch columns under any key layout
+    const cols = Array.isArray(columns) ? columns : [];
+    if (cols.length === 0) return;
     
-       mapping.timestamp = find('timestamp', 'date', 'time', 'datetime') || '';
+    const mapping: Partial<ColumnMapping> = {};
+    const lower = cols.map((c) => (c ? c.toLowerCase() : ''));
+    const find = (...terms: string[]) => cols[lower.findIndex((c) => terms.some((t) => c.includes(t)))] || '';
+    
+    mapping.timestamp = find('timestamp', 'date', 'time', 'datetime') || '';
     mapping.symbol = find('symbol', 'ticker', 'asset') || '';
     mapping.entry_price = find('entry', 'open', 'buy_price') || '';
     mapping.exit_price = find('exit', 'close', 'sell_price') || '';
