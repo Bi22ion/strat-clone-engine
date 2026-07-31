@@ -47,7 +47,7 @@ async function ensureDatasetSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS trade_datasets (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id TEXT NOT NULL,
+      user_id UUID NOT NULL,
       name VARCHAR(255) NOT NULL,
       original_filename VARCHAR(255),
       file_path TEXT,
@@ -59,12 +59,16 @@ async function ensureDatasetSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {});
+  
+  // Force user_id to UUID if it was previously created as text or integer
+  await query(`ALTER TABLE trade_datasets ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid`).catch(() => {});
   await query(`CREATE INDEX IF NOT EXISTS idx_trade_datasets_user ON trade_datasets(user_id)`).catch(() => {});
+
   await query(`
     CREATE TABLE IF NOT EXISTS parsed_trades (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       dataset_id UUID NOT NULL,
-      user_id TEXT NOT NULL,
+      user_id UUID NOT NULL,
       timestamp TIMESTAMPTZ,
       symbol VARCHAR(50),
       entry_price NUMERIC,
@@ -74,6 +78,8 @@ async function ensureDatasetSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {});
+  
+  await query(`ALTER TABLE parsed_trades ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid`).catch(() => {});
   await query(`CREATE INDEX IF NOT EXISTS idx_parsed_trades_dataset ON parsed_trades(dataset_id)`).catch(() => {});
 }
 
