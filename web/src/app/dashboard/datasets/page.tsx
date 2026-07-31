@@ -175,7 +175,7 @@ export default function DatasetsPage() {
         <div className="card mb-8">
           <h3 className="text-lg font-semibold mb-4">Column Mapping — {mappingDataset.name}</h3>
           <p className="text-sm text-zinc-400 mb-4">
-            {preview.totalRows} rows detected. Map CSV columns to required fields.
+            {preview.totalRows ?? 0} rows detected. Map CSV columns to required fields.
           </p>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -191,7 +191,7 @@ export default function DatasetsPage() {
                   onChange={(e) => setColumnMapping({ ...columnMapping, [field]: e.target.value })}
                 >
                   <option value="">— Select column —</option>
-                  {preview.columns?.map((col) => (
+                  {(preview.columns || []).map((col) => (
                     <option key={col} value={col}>{col}</option>
                   ))}
                 </select>
@@ -204,7 +204,7 @@ export default function DatasetsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    {preview.columns?.map((col) => (
+                    {(preview.columns || []).map((col) => (
                       <th key={col} className="text-left py-2 px-3 text-zinc-400 font-medium">{col}</th>
                     ))}
                   </tr>
@@ -212,7 +212,7 @@ export default function DatasetsPage() {
                 <tbody>
                   {preview.preview.slice(0, 3).map((row, i) => (
                     <tr key={i} className="border-b border-border/50">
-                      {preview.columns?.map((col) => (
+                      {(preview.columns || []).map((col) => (
                         <td key={col} className="py-2 px-3 mono-data text-zinc-300">{row[col]}</td>
                       ))}
                     </tr>
