@@ -58,22 +58,39 @@ export const dashboard = {
 
 export const datasets = {
   list: () => api<{ datasets: Dataset[] }>('/datasets'),
-  upload: (file: File, name?: string) => {
+  
+  upload: async (file: File, name?: string) => {
     const form = new FormData();
     form.append('file', file);
     if (name) form.append('name', name);
-    return api<{ dataset: Dataset; preview: DatasetPreview }>('/datasets/upload', {
+    
+    const res = await api<{ dataset: Dataset; preview: DatasetPreview }>('/datasets/upload', {
       method: 'POST',
       body: form,
     });
+    
+    // Safety check to ensure preview and columns always exist
+    if (res && res.preview && !res.preview.columns && res.preview.headers) {
+      res.preview.columns = res.preview.headers;
+    }
+    
+    return res;
   },
-  preview: (id: string) =>
-    api<{ dataset: Dataset; preview: DatasetPreview }>(`/datasets/${id}/preview`),
+
+  preview: async (id: string) => {
+    const res = await api<{ dataset: Dataset; preview: DatasetPreview }>(`/datasets/${id}/preview`);
+    if (res && res.preview && !res.preview.columns && res.preview.headers) {
+      res.preview.columns = res.preview.headers;
+    }
+    return res;
+  },
+
   parse: (id: string, columnMapping: ColumnMapping) =>
     api<{ dataset: Dataset; parseResult: ParseResult }>(`/datasets/${id}/parse`, {
       method: 'POST',
       body: JSON.stringify({ columnMapping }),
     }),
+
   delete: (id: string) =>
     api<{ success: boolean }>(`/datasets/${id}`, { method: 'DELETE' }),
 };
