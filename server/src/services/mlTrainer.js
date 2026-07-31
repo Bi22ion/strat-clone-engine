@@ -159,4 +159,3 @@ export function trainModelPython(datasetId, userId, modelName) {
     });
   });
 }
-```[cite: 6]
