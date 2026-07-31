@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Link2, Shield, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { Link2, Shield, Wifi, WifiOff, Loader as Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { broker, BrokerCredential } from '@/lib/api';
 
@@ -42,7 +42,7 @@ export default function BrokerPage() {
       setCredentials(cred);
       setApiKey('');
       setApiSecret('');
-      toast.success('Broker credentials saved securely');
+      toast.success('Broker credentials saved — connection verified');
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save');

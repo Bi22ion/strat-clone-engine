@@ -1,18 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Brain, Play, Trash2, Loader2, TrendingUp, Target, Clock } from 'lucide-react';
+import { Brain, Play, Trash2, Loader as Loader2, TrendingUp, Target, Clock, Sparkles, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Lightbulb, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { models, datasets, StrategyModel, Dataset } from '@/lib/api';
+import { models, datasets, StrategyModel, Dataset, OptimizationResult } from '@/lib/api';
 
 export default function ModelsPage() {
   const [modelList, setModelList] = useState<StrategyModel[]>([]);
   const [datasetList, setDatasetList] = useState<Dataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [training, setTraining] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState('');
   const [modelName, setModelName] = useState('');
   const [selectedModel, setSelectedModel] = useState<StrategyModel | null>(null);
+  const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -56,6 +58,23 @@ export default function ModelsPage() {
       load();
     } catch {
       toast.error('Failed to delete model');
+    }
+  }
+
+  async function handleOptimize() {
+    if (!selectedModel) return;
+    setOptimizing(true);
+    setOptimization(null);
+    try {
+      const { model, optimization: opt } = await models.optimize(selectedModel.id);
+      setSelectedModel(model);
+      setOptimization(opt);
+      toast.success(`AI optimization complete — ${opt.mistakesFound} mistakes corrected`);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Optimization failed');
+    } finally {
+      setOptimizing(false);
     }
   }
 
@@ -168,6 +187,81 @@ export default function ModelsPage() {
                   <p className="text-xs text-zinc-500">Avg Duration</p>
                 </div>
               </div>
+
+              {/* AI Strategy Optimizer Button */}
+              <button
+                onClick={handleOptimize}
+                disabled={optimizing}
+                className="w-full py-3 rounded-lg bg-gradient-to-r from-violet-500/20 to-emerald-500/20 border border-violet-500/30 text-violet-300 font-medium flex items-center justify-center gap-2 hover:from-violet-500/30 hover:to-emerald-500/30 transition-all disabled:opacity-50"
+              >
+                {optimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                {optimizing ? 'AI Analyzing & Optimizing...' : 'AI Strategy Optimizer'}
+              </button>
+
+              {/* Optimization Results */}
+              {optimization && (
+                <div className="space-y-4">
+                  {/* Before/After comparison */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-zinc-900 rounded-lg p-3">
+                      <p className="text-xs text-zinc-500 mb-1">Original Win Rate</p>
+                      <p className="text-lg font-bold mono-data text-zinc-400">{optimization.originalWinRate}%</p>
+                      <ArrowRight className="hidden" />
+                    </div>
+                    <div className="bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">
+                      <p className="text-xs text-emerald-400 mb-1">Optimized Win Rate</p>
+                      <p className="text-lg font-bold mono-data text-emerald-400">{optimization.optimizedWinRate}%</p>
+                    </div>
+                    <div className="bg-zinc-900 rounded-lg p-3">
+                      <p className="text-xs text-zinc-500 mb-1">Original R/R</p>
+                      <p className="text-lg font-bold mono-data text-zinc-400">{optimization.originalRR}</p>
+                    </div>
+                    <div className="bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">
+                      <p className="text-xs text-emerald-400 mb-1">Optimized R/R</p>
+                      <p className="text-lg font-bold mono-data text-emerald-400">{optimization.optimizedRR}</p>
+                    </div>
+                  </div>
+
+                  {/* Mistakes Found */}
+                  {optimization.mistakes.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-amber-400 mb-3 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        {optimization.mistakesFound} Trading Mistakes Detected
+                      </h4>
+                      <div className="space-y-2">
+                        {optimization.mistakes.map((m, i) => (
+                          <div key={i} className="bg-zinc-900 rounded-lg p-3 border-l-2"
+                            style={{ borderColor: m.severity === 'high' ? '#ef4444' : m.severity === 'medium' ? '#f59e0b' : '#3b82f6' }}>
+                            <p className="text-sm font-medium text-zinc-200">{m.type.replace(/_/g, ' ').toUpperCase()}</p>
+                            <p className="text-xs text-zinc-400 mt-1">{m.description}</p>
+                            <p className="text-xs text-emerald-400 mt-2 flex items-start gap-1">
+                              <CheckCircle className="w-3 h-3 mt-0.5 shrink-0" /> {m.correction}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Improvements Applied */}
+                  {optimization.improvements.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-emerald-400 mb-3 flex items-center gap-2">
+                        <Lightbulb className="w-4 h-4" />
+                        Optimizations Applied
+                      </h4>
+                      <div className="space-y-1">
+                        {optimization.improvements.map((imp, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-zinc-300">
+                            <CheckCircle className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" /> {imp}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {selectedModel.preferred_asset_classes && (
                 <div>

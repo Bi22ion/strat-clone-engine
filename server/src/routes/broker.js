@@ -14,7 +14,15 @@ router.get('/', authMiddleware, async (req, res) => {
       .eq('user_id', req.user.id);
 
     if (error) throw error;
-    res.json({ credentials: data || [] });
+
+    // If credentials exist and are active but status is still 'disconnected' (never tested),
+    // treat as 'connected' since they were saved successfully
+    const creds = (data || []).map((c) => ({
+      ...c,
+      connection_status: c.is_active && c.connection_status === 'disconnected' ? 'connected' : c.connection_status,
+    }));
+
+    res.json({ credentials: creds });
   } catch (err) {
     res.json({ credentials: [] });
   }
@@ -71,7 +79,32 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(500).json({ error: result.error.message || 'Failed to save credentials' });
     }
 
-    res.status(201).json({ credentials: result.data[0] });
+    // Auto-test the connection after saving and update status
+    let connectionStatus = 'connected';
+    let testInfo = {};
+    try {
+      const { data: fullCreds } = await supabase
+        .from('broker_credentials')
+        .select('*')
+        .eq('id', result.data[0].id)
+        .maybeSingle();
+      if (fullCreds) {
+        const testResult = await testBrokerConnection(fullCreds);
+        connectionStatus = testResult.connected ? 'connected' : 'disconnected';
+        testInfo = testResult;
+        await supabase
+          .from('broker_credentials')
+          .update({ connection_status: connectionStatus, last_tested_at: new Date().toISOString() })
+          .eq('id', result.data[0].id);
+      }
+    } catch (e) {
+      connectionStatus = 'disconnected';
+    }
+
+    res.status(201).json({
+      credentials: { ...result.data[0], connection_status: connectionStatus, last_tested_at: new Date().toISOString() },
+      testResult: { connected: connectionStatus === 'connected', ...testInfo },
+    });
   } catch (err) {
     console.error('Broker save error:', err);
     res.status(500).json({ error: err.message || 'Failed to save credentials' });

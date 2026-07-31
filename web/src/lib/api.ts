@@ -54,6 +54,7 @@ export const auth = {
 
 export const dashboard = {
   summary: () => api<DashboardSummary>('/dashboard/summary'),
+  liveStocks: () => api<{ liveStocks: LiveStock[]; projectedTrades: ProjectedTrade[] }>('/dashboard/live-stocks'),
 };
 
 export const datasets = {
@@ -89,6 +90,10 @@ export const models = {
     api<{ model: StrategyModel }>('/models/train', {
       method: 'POST',
       body: JSON.stringify({ datasetId, name }),
+    }),
+  optimize: (id: string) =>
+    api<{ model: StrategyModel; optimization: OptimizationResult }>(`/models/${id}/optimize`, {
+      method: 'POST',
     }),
   delete: (id: string) =>
     api<{ success: boolean }>(`/models/${id}`, { method: 'DELETE' }),
@@ -364,4 +369,46 @@ export interface GatekeeperMessage {
   page: string;
   is_read: boolean;
   created_at: string;
+}
+
+export interface LiveStock {
+  symbol: string;
+  price: number;
+  change: number;
+  changePct: number;
+  isUp: boolean;
+  tradeCount: number;
+  winRate: number;
+  totalPnl: number;
+}
+
+export interface ProjectedTrade {
+  model: string;
+  modelId: string | null;
+  symbol: string;
+  side: string;
+  entryPrice: number;
+  takeProfit: number;
+  stopLoss: number;
+  confidence: number;
+  winRate: number;
+  riskReward: number;
+  signal: string;
+}
+
+export interface OptimizationResult {
+  mistakesFound: number;
+  mistakes: TradingMistake[];
+  improvements: string[];
+  originalWinRate: number;
+  optimizedWinRate: number;
+  originalRR: number;
+  optimizedRR: number;
+}
+
+export interface TradingMistake {
+  type: string;
+  severity: string;
+  description: string;
+  correction: string;
 }
