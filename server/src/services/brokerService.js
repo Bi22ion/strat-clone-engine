@@ -1,7 +1,7 @@
 import { decrypt } from '../utils/encryption.js';
 
 const PAPER_BASE = process.env.ALPACA_PAPER_URL || 'https://paper-api.alpaca.markets';
-const LIVE_BASE = 'https://api.alpaca.markets';
+const LIVE_BASE = process.env.ALPACA_LIVE_URL || 'https://api.alpaca.markets';
 
 export class AlpacaBroker {
   constructor(apiKey, apiSecret, isPaper = true) {
