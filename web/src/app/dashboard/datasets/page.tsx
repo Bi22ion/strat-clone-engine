@@ -213,7 +213,9 @@ export default function DatasetsPage() {
                   {preview.preview.slice(0, 3).map((row, i) => (
                     <tr key={i} className="border-b border-border/50">
                       {(preview.columns || []).map((col) => (
-                        <td key={col} className="py-2 px-3 mono-data text-zinc-300">{row[col]}</td>
+                        <td key={col} className="py-2 px-3 mono-data text-zinc-300">
+                          {row && typeof row === 'object' ? row[col] ?? '' : ''}
+                        </td>
                       ))}
                     </tr>
                   ))}
