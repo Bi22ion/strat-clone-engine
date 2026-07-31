@@ -57,8 +57,21 @@ export default function BrokerPage() {
       const result = await broker.test();
       if (result.connected) {
         toast.success(`Broker connection verified — Equity: $${result.equity}`);
+        if (credentials) {
+          setCredentials({
+            ...credentials,
+            connection_status: 'connected',
+            last_tested_at: new Date().toISOString()
+          });
+        }
       } else {
         toast.error(result.error || 'Connection failed');
+        if (credentials) {
+          setCredentials({
+            ...credentials,
+            connection_status: 'disconnected',
+          });
+        }
       }
       load();
     } catch (err) {
