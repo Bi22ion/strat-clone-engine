@@ -318,7 +318,7 @@ function buildOptimizedRuleset(trades, mistakes) {
   const topSymbols = Object.entries(symbolCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([s]) => s);
 
   const assetCounts = {};
-  trades.forEach((t) => { assetCounts[t.asset_class || 'equity'] = (assetCounts[t.asset_class || 'equity')] || 0) + 1; });
+  trades.forEach((t) => { assetCounts[t.asset_class || 'equity'] = (assetCounts[t.asset_class || 'equity'] || 0) + 1; });
   const topAssets = Object.entries(assetCounts).sort((a, b) => b[1] - a[1]).map(([a]) => a);
 
   const improvements = [];
