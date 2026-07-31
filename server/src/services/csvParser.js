@@ -1,8 +1,29 @@
 import { parse } from 'csv-parse/sync';
 import fs from 'fs';
+import path from 'path';
 import { query } from '../db.js';
 
 const SYMBOL_REGEX = /^[A-Z]{1,10}(\.[A-Z]{1,2})?$/;
+
+const ALLOWED_EXTENSIONS = ['.csv', '.tsv', '.txt'];
+
+export function isAllowedFile(filename) {
+  if (!filename) return false;
+  const ext = path.extname(filename).toLowerCase();
+  return ALLOWED_EXTENSIONS.includes(ext);
+}
+
+function detectDelimiter(fileContent, filename) {
+  const ext = path.extname(filename || '').toLowerCase();
+  if (ext === '.tsv') return '\t';
+  if (ext === '.txt') {
+    const firstLine = (fileContent.split(/\r?\n/, 1)[0] || '');
+    const tabs = (firstLine.match(/\t/g) || []).length;
+    const commas = (firstLine.match(/,/g) || []).length;
+    return tabs > commas ? '\t' : ',';
+  }
+  return ',';
+}
 
 function parseTimestamp(value) {
   const date = new Date(value);
@@ -30,8 +51,11 @@ function calculateDurationMinutes(entry, exit) {
 
 export async function parseAndIngestDataset(datasetId, userId, filePath, columnMapping) {
   const fileContent = fs.readFileSync(filePath, 'utf8');
+  const filename = columnMapping.__filename || filePath;
+  const delimiter = detectDelimiter(fileContent, filename);
   const records = parse(fileContent, {
     columns: (header) => header.map(h => String(h).replace(/^\uFEFF/, '').trim()),
+    delimiter,
     skip_empty_lines: true,
     trim: true,
     relax_column_count: true,
@@ -117,8 +141,10 @@ export async function parseAndIngestDataset(datasetId, userId, filePath, columnM
 
 export async function getDatasetPreview(filePath, maxRows = 5) {
   const fileContent = fs.readFileSync(filePath, 'utf8');
+  const delimiter = detectDelimiter(fileContent, filePath);
   const records = parse(fileContent, {
     columns: (header) => header.map(h => String(h).replace(/^\uFEFF/, '').trim()),
+    delimiter,
     skip_empty_lines: true,
     trim: true,
     relax_column_count: true,

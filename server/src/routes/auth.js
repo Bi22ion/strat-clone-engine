@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../db.js';
 import { signToken } from '../middleware/auth.js';
+import { ensureGatekeeperSchema, seedDefaultProfile } from '../services/gatekeeperService.js';
 
 const router = Router();
 
@@ -28,6 +29,11 @@ router.post('/register', async (req, res) => {
 
     const user = result.rows[0];
     const token = signToken({ id: user.id, email: user.email });
+
+    // Gift each new trader a default Gatekeeper profile site.
+    ensureGatekeeperSchema()
+      .then(() => seedDefaultProfile(user.id, user.full_name, user.email))
+      .catch(() => {});
 
     res.status(201).json({ user, token });
   } catch (err) {

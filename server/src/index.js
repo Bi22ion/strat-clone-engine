@@ -10,6 +10,7 @@ import datasetRoutes from './routes/datasets.js';
 import modelRoutes from './routes/models.js';
 import brokerRoutes from './routes/broker.js';
 import botRoutes from './routes/bots.js';
+import gatekeeperRoutes from './routes/gatekeeper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../../.env') });
@@ -63,6 +64,7 @@ app.use('/api/datasets', datasetRoutes);
 app.use('/api/models', modelRoutes);
 app.use('/api/broker', brokerRoutes);
 app.use('/api/bots', botRoutes);
+app.use('/api/gatekeeper', gatekeeperRoutes);
 
 // 404 Fallback route handler so unhandled endpoints return clear JSON instead of HTML/empty responses
 app.use((req, res) => {

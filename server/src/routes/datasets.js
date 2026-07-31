@@ -30,10 +30,13 @@ const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowed = ['.csv', '.tsv', '.txt'];
+    const validMime = ['text/csv', 'text/plain', 'text/tab-separated-values'].includes(file.mimetype);
+    if (allowed.includes(ext) || validMime) {
       cb(null, true);
     } else {
-      cb(new Error('Only CSV files are allowed'));
+      cb(new Error('Only CSV, TSV, or TXT files are allowed'));
     }
   },
 });
@@ -68,7 +71,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 
     let rawPreview = { headers: [], rows: [] };
     try {
-      rawPreview = getDatasetPreview(req.file.path);
+      rawPreview = await getDatasetPreview(req.file.path);
     } catch (e) {
       // ignore preview errors
     }
@@ -105,7 +108,7 @@ router.get('/:id/preview', authMiddleware, async (req, res) => {
     let rawPreview = { headers: [], rows: [] };
     try {
       if (dataset.file_path) {
-        rawPreview = getDatasetPreview(dataset.file_path);
+        rawPreview = await getDatasetPreview(dataset.file_path);
       }
     } catch (e) {
       // ignore preview errors

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Upload, FileSpreadsheet, Trash2, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Trash2, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Loader as Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { datasets, Dataset, ColumnMapping, DatasetPreview } from '@/lib/api';
 
@@ -54,8 +54,9 @@ export default function DatasetsPage() {
   useEffect(() => { loadDatasets(); }, [loadDatasets]);
 
   async function handleFile(file: File) {
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Only CSV files are supported');
+    const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || '';
+    if (!['.csv', '.tsv', '.txt'].includes(ext)) {
+      toast.error('Only CSV, TSV, or TXT files are supported');
       return;
     }
     setUploading(true);
@@ -64,7 +65,7 @@ export default function DatasetsPage() {
       toast.success('Dataset uploaded successfully');
       setMappingDataset(result.dataset);
       setPreview(result.preview);
-      autoMapColumns(result.preview.columns);
+      autoMapColumns(result.preview?.columns || result.preview?.headers || []);
       loadDatasets();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
@@ -127,9 +128,10 @@ export default function DatasetsPage() {
   async function openMapping(ds: Dataset) {
     try {
       const result = await datasets.preview(ds.id);
+      const p = result.preview || { columns: [], preview: [], totalRows: 0 };
       setMappingDataset(result.dataset);
-      setPreview(result.preview);
-      autoMapColumns(result.preview.columns);
+      setPreview(p);
+      autoMapColumns(p?.columns || p?.headers || []);
     } catch {
       toast.error('Failed to load preview');
     }
@@ -161,13 +163,13 @@ export default function DatasetsPage() {
           ) : (
             <Upload className="w-10 h-10 text-zinc-500 mb-4" />
           )}
-          <p className="text-lg font-medium mb-1">Drag & drop your CSV file here</p>
+          <p className="text-lg font-medium mb-1">Drag & drop your CSV, TSV, or TXT file here</p>
           <p className="text-sm text-zinc-500 mb-4">or click to browse</p>
           <label className="btn-primary cursor-pointer">
-            Select CSV File
+            Select File
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,.tsv,.txt"
               className="hidden"
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Brain, Database, Link2, Bot, Activity, ArrowRight } from 'lucide-react';
 import { dashboard, DashboardSummary } from '@/lib/api';
+import GiftWebsitePreview from './GiftWebsitePreview';
 
 function MetricCard({ label, value, icon: Icon, color }: {
   label: string;
@@ -92,20 +93,28 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <h2 className="text-lg font-semibold mb-4">Quick Navigation</h2>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {quickLinks.map((link) => (
-          <Link key={link.href} href={link.href} className="card-hover group flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <link.icon className="w-5 h-5 text-zinc-400 group-hover:text-accent-cyan transition-colors" />
-              <div>
-                <p className="font-medium text-sm">{link.label}</p>
-                <p className="text-xs text-zinc-500">{link.desc}</p>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-accent-cyan transition-colors" />
-          </Link>
-        ))}
+      <div className="grid lg:grid-cols-3 gap-8 items-start">
+        <div className="lg:col-span-2">
+          <h2 className="text-lg font-semibold mb-4">Quick Navigation</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {quickLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="card-hover group flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <link.icon className="w-5 h-5 text-zinc-400 group-hover:text-accent-cyan transition-colors" />
+                  <div>
+                    <p className="font-medium text-sm">{link.label}</p>
+                    <p className="text-xs text-zinc-500">{link.desc}</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-accent-cyan transition-colors" />
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="lg:col-span-1">
+          <GiftWebsitePreview />
+        </div>
       </div>
     </div>
   );

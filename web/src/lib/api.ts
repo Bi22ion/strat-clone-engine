@@ -168,7 +168,9 @@ export interface ColumnMapping {
 
 export interface DatasetPreview {
   columns: string[];
+  headers?: string[];
   preview: Record<string, string>[];
+  rows?: Record<string, string>[];
   totalRows: number;
 }
 
@@ -236,3 +238,84 @@ export interface ExecutionLog {
   message?: string;
   created_at: string;
 }
+
+export interface GatekeeperProfile {
+  id: string;
+  owner_id: string;
+  slug: string;
+  display_name: string | null;
+  tagline: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  cover_url: string | null;
+  is_published: boolean;
+  template: string;
+  social_links: Record<string, string> | string;
+  theme: GatekeeperTheme | string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GatekeeperTheme {
+  primary_color?: string;
+  font?: string;
+  layout?: string;
+}
+
+export interface GatekeeperBlock {
+  id: string;
+  profile_id: string;
+  block_type: string;
+  title: string | null;
+  content: string | null;
+  media_url: string | null;
+  layout: Record<string, unknown> | string;
+  sort_order: number;
+  is_visible: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GatekeeperSubscription {
+  id?: string;
+  owner_id?: string;
+  tier: 'free' | 'weekly' | 'monthly' | 'yearly';
+  status: 'active' | 'canceled' | 'expired';
+  price_cents: number;
+  currency?: string;
+  started_at?: string;
+  ends_at?: string | null;
+}
+
+export interface GatekeeperProfileData {
+  profile: GatekeeperProfile;
+  blocks: GatekeeperBlock[];
+}
+
+export const gatekeeper = {
+  getProfile: () => api<GatekeeperProfileData>('/gatekeeper/profile'),
+  updateProfile: (data: Partial<GatekeeperProfile> & { social_links?: Record<string, string>; theme?: GatekeeperTheme }) =>
+    api<{ profile: GatekeeperProfile }>('/gatekeeper/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  addBlock: (data: Partial<GatekeeperBlock>) =>
+    api<{ block: GatekeeperBlock }>('/gatekeeper/blocks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateBlock: (id: string, data: Partial<GatekeeperBlock>) =>
+    api<{ block: GatekeeperBlock }>(`/gatekeeper/blocks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteBlock: (id: string) =>
+    api<{ success: boolean }>(`/gatekeeper/blocks/${id}`, { method: 'DELETE' }),
+  getSubscription: () => api<{ subscription: GatekeeperSubscription }>('/gatekeeper/subscription'),
+  updateSubscription: (tier: GatekeeperSubscription['tier']) =>
+    api<{ subscription: GatekeeperSubscription }>('/gatekeeper/subscription', {
+      method: 'PUT',
+      body: JSON.stringify({ tier }),
+    }),
+  getSite: (slug: string) => api<GatekeeperProfileData>(`/gatekeeper/site/${slug}`),
+};
