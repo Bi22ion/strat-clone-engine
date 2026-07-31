@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { trainModelNode } from '../services/mlTrainer.js';
 
@@ -7,15 +7,28 @@ const router = Router();
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      `SELECT sm.*, td.name as dataset_name
-       FROM strategy_models sm
-       LEFT JOIN trade_datasets td ON sm.dataset_id = td.id
-       WHERE sm.user_id = $1
-       ORDER BY sm.id DESC`,
-      [req.user.id]
-    ).catch(() => ({ rows: [] }));
-    res.json({ models: result.rows });
+    const { data, error } = await supabase
+      .from('strategy_models')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Enrich with dataset names
+    const enriched = await Promise.all((data || []).map(async (m) => {
+      if (m.dataset_id) {
+        const { data: ds } = await supabase
+          .from('trade_datasets')
+          .select('name')
+          .eq('id', m.dataset_id)
+          .maybeSingle();
+        return { ...m, dataset_name: ds?.name || null };
+      }
+      return m;
+    }));
+
+    res.json({ models: enriched });
   } catch (err) {
     res.json({ models: [] });
   }
@@ -23,18 +36,28 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      `SELECT sm.*, td.name as dataset_name
-       FROM strategy_models sm
-       LEFT JOIN trade_datasets td ON sm.dataset_id = td.id
-       WHERE sm.id = $1 AND sm.user_id = $2`,
-      [req.params.id, req.user.id]
-    ).catch(() => ({ rows: [] }));
+    const { data: model } = await supabase
+      .from('strategy_models')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
 
-    if (result.rows.length === 0) {
+    if (!model) {
       return res.status(404).json({ error: 'Model not found' });
     }
-    res.json({ model: result.rows[0] });
+
+    let dataset_name = null;
+    if (model.dataset_id) {
+      const { data: ds } = await supabase
+        .from('trade_datasets')
+        .select('name')
+        .eq('id', model.dataset_id)
+        .maybeSingle();
+      dataset_name = ds?.name || null;
+    }
+
+    res.json({ model: { ...model, dataset_name } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch model' });
   }
@@ -47,27 +70,34 @@ router.post('/train', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'datasetId is required' });
     }
 
-    const dataset = await query(
-      `SELECT * FROM trade_datasets WHERE id = $1 AND user_id = $2`,
-      [datasetId, req.user.id]
-    ).catch(() => ({ rows: [] }));
+    const { data: dataset } = await supabase
+      .from('trade_datasets')
+      .select('*')
+      .eq('id', datasetId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
 
-    if (dataset.rows.length === 0) {
+    if (!dataset) {
       return res.status(400).json({ error: 'Dataset not found' });
     }
 
-    const modelName = name || `Model - ${dataset.rows[0].name || 'Strategy'}`;
+    const modelName = name || `Model - ${dataset.name || 'Strategy'}`;
     let model = null;
     try {
       model = await trainModelNode(datasetId, req.user.id, modelName);
     } catch (e) {
-      // Fallback manual insert if ML trainer service throws
-      const fallbackInsert = await query(
-        `INSERT INTO strategy_models (user_id, dataset_id, name, status, win_rate)
-         VALUES ($1, $2, $3, 'ready', 0.5) RETURNING *`,
-        [req.user.id, datasetId, modelName]
-      ).catch(() => ({ rows: [{ id: 1, name: modelName, status: 'ready' }] }));
-      model = fallbackInsert.rows[0];
+      const { data: fallback } = await supabase
+        .from('strategy_models')
+        .insert({
+          user_id: req.user.id,
+          dataset_id: datasetId,
+          name: modelName,
+          status: 'ready',
+          win_rate: 50,
+        })
+        .select('*')
+        .single();
+      model = fallback || { id: '1', name: modelName, status: 'ready' };
     }
 
     res.status(201).json({ model });
@@ -79,12 +109,14 @@ router.post('/train', authMiddleware, async (req, res) => {
 
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      'DELETE FROM strategy_models WHERE id = $1 AND user_id = $2 RETURNING id',
-      [req.params.id, req.user.id]
-    ).catch(() => ({ rows: [] }));
+    const { data, error } = await supabase
+      .from('strategy_models')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select('id');
 
-    if (result.rows.length === 0) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Model not found' });
     }
     res.json({ success: true });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { query } from '../db.js';
+import { supabase } from '../db.js';
 import { signToken } from '../middleware/auth.js';
 import { ensureGatekeeperSchema, seedDefaultProfile } from '../services/gatekeeperService.js';
 
@@ -16,21 +16,34 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    const existing = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (existing.rows.length > 0) {
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (existing) {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const result = await query(
-      'INSERT INTO users (email, password_hash, full_name) VALUES ($1, $2, $3) RETURNING id, email, full_name, created_at',
-      [email.toLowerCase(), passwordHash, fullName || null]
-    );
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert({
+        email: email.toLowerCase(),
+        password_hash: passwordHash,
+        full_name: fullName || null,
+      })
+      .select('id, email, full_name, created_at')
+      .single();
 
-    const user = result.rows[0];
+    if (error) {
+      console.error('Register error:', error);
+      return res.status(500).json({ error: 'Registration failed' });
+    }
+
     const token = signToken({ id: user.id, email: user.email });
 
-    // Gift each new trader a default Gatekeeper profile site.
     ensureGatekeeperSchema()
       .then(() => seedDefaultProfile(user.id, user.full_name, user.email))
       .catch(() => {});
@@ -49,12 +62,16 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const result = await query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (result.rows.length === 0) {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const user = result.rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -79,14 +96,16 @@ router.get('/me', async (req, res) => {
     }
     const { verifyToken } = await import('../middleware/auth.js');
     const decoded = verifyToken(authHeader.slice(7));
-    const result = await query(
-      'SELECT id, email, full_name, created_at FROM users WHERE id = $1',
-      [decoded.id]
-    );
-    if (result.rows.length === 0) {
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, email, full_name, created_at')
+      .eq('id', decoded.id)
+      .maybeSingle();
+
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ user: result.rows[0] });
+    res.json({ user });
   } catch {
     res.status(401).json({ error: 'Invalid token' });
   }

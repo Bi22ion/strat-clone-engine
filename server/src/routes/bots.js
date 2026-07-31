@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { AlpacaBroker } from '../services/brokerService.js';
 
@@ -7,15 +7,33 @@ const router = Router();
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      `SELECT tb.*, sm.name as model_name, sm.win_rate, sm.status as model_status
-       FROM trading_bots tb
-       JOIN strategy_models sm ON tb.model_id = sm.id
-       WHERE tb.user_id = $1
-       ORDER BY tb.id DESC`,
-      [req.user.id]
-    ).catch(() => ({ rows: [] }));
-    res.json({ bots: result.rows });
+    const { data, error } = await supabase
+      .from('trading_bots')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Enrich with model info
+    const enriched = await Promise.all((data || []).map(async (bot) => {
+      if (bot.model_id) {
+        const { data: model } = await supabase
+          .from('strategy_models')
+          .select('name, win_rate, status')
+          .eq('id', bot.model_id)
+          .maybeSingle();
+        return {
+          ...bot,
+          model_name: model?.name || null,
+          win_rate: model?.win_rate || null,
+          model_status: model?.status || null,
+        };
+      }
+      return bot;
+    }));
+
+    res.json({ bots: enriched });
   } catch (err) {
     res.json({ bots: [] });
   }
@@ -28,27 +46,31 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'modelId is required' });
     }
 
-    const model = await query(
-      `SELECT * FROM strategy_models WHERE id = $1 AND user_id = $2`,
-      [modelId, req.user.id]
-    ).catch(() => ({ rows: [] }));
+    const { data: model } = await supabase
+      .from('strategy_models')
+      .select('*')
+      .eq('id', modelId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
 
-    if (model.rows.length === 0) {
+    if (!model) {
       return res.status(400).json({ error: 'Model not found' });
     }
 
-    const broker = await query(
-      'SELECT id FROM broker_credentials WHERE user_id = $1 LIMIT 1',
-      [req.user.id]
-    ).catch(() => ({ rows: [] }));
+    const { data, error } = await supabase
+      .from('trading_bots')
+      .insert({
+        user_id: req.user.id,
+        model_id: modelId,
+        name: name || `Bot - ${model.name}`,
+        max_daily_loss: maxDailyLoss,
+        status: 'inactive',
+      })
+      .select('*')
+      .single();
 
-    const result = await query(
-      `INSERT INTO trading_bots (user_id, model_id, name, max_daily_loss, status)
-       VALUES ($1, $2, $3, $4, 'inactive') RETURNING *`,
-      [req.user.id, modelId, name || `Bot - ${model.rows[0].name}`, maxDailyLoss]
-    );
-
-    res.status(201).json({ bot: result.rows[0] });
+    if (error) throw error;
+    res.status(201).json({ bot: data });
   } catch (err) {
     console.error('Create bot error:', err);
     res.status(500).json({ error: 'Failed to create bot' });
@@ -57,14 +79,17 @@ router.post('/', authMiddleware, async (req, res) => {
 
 router.patch('/:id/start', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      `UPDATE trading_bots SET status = 'active' WHERE id = $1 AND user_id = $2 RETURNING *`,
-      [req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) {
+    const { data, error } = await supabase
+      .from('trading_bots')
+      .update({ status: 'active' })
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select('*');
+
+    if (error || !data || data.length === 0) {
       return res.status(404).json({ error: 'Bot not found' });
     }
-    res.json({ bot: result.rows[0] });
+    res.json({ bot: data[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to start bot' });
   }
@@ -72,14 +97,17 @@ router.patch('/:id/start', authMiddleware, async (req, res) => {
 
 router.patch('/:id/stop', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      `UPDATE trading_bots SET status = 'inactive' WHERE id = $1 AND user_id = $2 RETURNING *`,
-      [req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) {
+    const { data, error } = await supabase
+      .from('trading_bots')
+      .update({ status: 'inactive' })
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select('*');
+
+    if (error || !data || data.length === 0) {
       return res.status(404).json({ error: 'Bot not found' });
     }
-    res.json({ bot: result.rows[0] });
+    res.json({ bot: data[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to stop bot' });
   }
@@ -88,14 +116,17 @@ router.patch('/:id/stop', authMiddleware, async (req, res) => {
 router.patch('/:id/risk', authMiddleware, async (req, res) => {
   try {
     const { maxDailyLoss } = req.body;
-    const result = await query(
-      `UPDATE trading_bots SET max_daily_loss = $1 WHERE id = $2 AND user_id = $3 RETURNING *`,
-      [maxDailyLoss, req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) {
+    const { data, error } = await supabase
+      .from('trading_bots')
+      .update({ max_daily_loss: maxDailyLoss })
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select('*');
+
+    if (error || !data || data.length === 0) {
       return res.status(404).json({ error: 'Bot not found' });
     }
-    res.json({ bot: result.rows[0] });
+    res.json({ bot: data[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update risk settings' });
   }
@@ -105,35 +136,40 @@ router.post('/kill-switch', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const activeBots = await query(
-      `UPDATE trading_bots SET status = 'stopped_emergency' WHERE user_id = $1 AND status = 'active' RETURNING *`,
-      [userId]
-    ).catch(() => ({ rows: [] }));
+    const { data: activeBots } = await supabase
+      .from('trading_bots')
+      .update({ status: 'stopped_emergency' })
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .select('*');
 
-    const credentials = await query(
-      'SELECT * FROM broker_credentials WHERE user_id = $1 LIMIT 1',
-      [userId]
-    ).catch(() => ({ rows: [] }));
+    const { data: credentials } = await supabase
+      .from('broker_credentials')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(1)
+      .maybeSingle();
 
     let closeResult = null;
-    if (credentials.rows.length > 0) {
+    if (credentials) {
       try {
-        const broker = AlpacaBroker.fromCredentials(credentials.rows[0]);
+        const broker = AlpacaBroker.fromCredentials(credentials);
         closeResult = await broker.closeAllPositions();
       } catch (err) {
         closeResult = { error: err.message };
       }
     }
 
-    await query(
-      `INSERT INTO execution_logs (user_id, action, status, message)
-       VALUES ($1, 'EMERGENCY_KILL', 'executed', 'Emergency kill switch activated - all bots stopped')`,
-      [userId]
-    ).catch(() => {});
+    await supabase.from('execution_logs').insert({
+      user_id: userId,
+      action: 'EMERGENCY_KILL',
+      status: 'executed',
+      message: 'Emergency kill switch activated - all bots stopped',
+    });
 
     res.json({
       success: true,
-      botsStopped: activeBots.rows.length,
+      botsStopped: activeBots?.length || 0,
       positionsClosed: closeResult,
     });
   } catch (err) {
@@ -145,16 +181,29 @@ router.post('/kill-switch', authMiddleware, async (req, res) => {
 router.get('/logs', authMiddleware, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
-    const result = await query(
-      `SELECT el.*, tb.name as bot_name
-       FROM execution_logs el
-       LEFT JOIN trading_bots tb ON el.bot_id = tb.id
-       WHERE el.user_id = $1
-       ORDER BY el.id DESC
-       LIMIT $2`,
-      [req.user.id, limit]
-    ).catch(() => ({ rows: [] }));
-    res.json({ logs: result.rows });
+    const { data, error } = await supabase
+      .from('execution_logs')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    // Enrich with bot names
+    const enriched = await Promise.all((data || []).map(async (log) => {
+      if (log.bot_id) {
+        const { data: bot } = await supabase
+          .from('trading_bots')
+          .select('name')
+          .eq('id', log.bot_id)
+          .maybeSingle();
+        return { ...log, bot_name: bot?.name || null };
+      }
+      return log;
+    }));
+
+    res.json({ logs: enriched });
   } catch (err) {
     res.json({ logs: [] });
   }

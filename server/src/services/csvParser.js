@@ -1,7 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import fs from 'fs';
 import path from 'path';
-import { query } from '../db.js';
+import { supabase } from '../db.js';
 
 const SYMBOL_REGEX = /^[A-Z]{1,10}(\.[A-Z]{1,2})?$/;
 
@@ -44,11 +44,6 @@ function inferAssetClass(symbol) {
   return 'equity';
 }
 
-function calculateDurationMinutes(entry, exit) {
-  const diff = new Date(exit).getTime() - new Date(entry).getTime();
-  return Math.max(0, Math.round(diff / 60000));
-}
-
 export async function parseAndIngestDataset(datasetId, userId, filePath, columnMapping) {
   const fileContent = fs.readFileSync(filePath, 'utf8');
   const filename = columnMapping.__filename || filePath;
@@ -74,13 +69,14 @@ export async function parseAndIngestDataset(datasetId, userId, filePath, columnM
     side: sideCol,
   } = columnMapping;
 
-  await query(
-    `UPDATE trade_datasets SET status = 'processing', column_mapping = $1 WHERE id = $2`,
-    [JSON.stringify(columnMapping), datasetId]
-  );
+  await supabase
+    .from('trade_datasets')
+    .update({ status: 'processing', column_mapping: JSON.stringify(columnMapping) })
+    .eq('id', datasetId);
 
   let validCount = 0;
   const errors = [];
+  const tradeRows = [];
 
   for (let i = 0; i < records.length; i++) {
     const row = records[i];
@@ -112,29 +108,49 @@ export async function parseAndIngestDataset(datasetId, userId, filePath, columnM
       pnl = exitPrice - entryPrice;
     }
 
-    const durationMinutes = calculateDurationMinutes(timestamp, timestamp);
     const assetClass = inferAssetClass(symbol);
 
-    await query(
-      `INSERT INTO parsed_trades (dataset_id, user_id, timestamp, symbol, entry_price, exit_price, pnl, side, duration_minutes, asset_class)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [datasetId, userId, timestamp, symbol, entryPrice, exitPrice, pnl, side, durationMinutes, assetClass]
-    );
+    tradeRows.push({
+      dataset_id: datasetId,
+      user_id: userId,
+      timestamp,
+      symbol,
+      entry_price: entryPrice,
+      exit_price: exitPrice,
+      pnl,
+      side,
+      duration_minutes: 0,
+      asset_class: assetClass,
+    });
     validCount++;
   }
 
   if (validCount === 0) {
-    await query(
-      `UPDATE trade_datasets SET status = 'failed', error_message = $1 WHERE id = $2`,
-      [errors.slice(0, 5).join('; '), datasetId]
-    );
+    await supabase
+      .from('trade_datasets')
+      .update({ status: 'failed', error_message: errors.slice(0, 5).join('; ') })
+      .eq('id', datasetId);
     throw new Error(`No valid rows found. Errors: ${errors.slice(0, 3).join('; ')}`);
   }
 
-  await query(
-    `UPDATE trade_datasets SET status = 'processed', row_count = $1, error_message = $2 WHERE id = $3`,
-    [validCount, errors.length > 0 ? `${errors.length} rows skipped` : null, datasetId]
-  );
+  // Batch insert trade rows (Supabase has a limit, so insert in chunks)
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < tradeRows.length; i += BATCH_SIZE) {
+    const batch = tradeRows.slice(i, i + BATCH_SIZE);
+    const { error: insertError } = await supabase.from('parsed_trades').insert(batch);
+    if (insertError) {
+      console.error('Insert batch error:', insertError);
+    }
+  }
+
+  await supabase
+    .from('trade_datasets')
+    .update({
+      status: 'processed',
+      row_count: validCount,
+      error_message: errors.length > 0 ? `${errors.length} rows skipped` : null,
+    })
+    .eq('id', datasetId);
 
   return { validCount, skipped: errors.length, errors: errors.slice(0, 10) };
 }
@@ -151,12 +167,12 @@ export async function getDatasetPreview(filePath, maxRows = 5) {
   });
   const columns = records.length > 0 ? Object.keys(records[0]) : [];
   const previewRows = records.slice(0, maxRows);
-  
-  return { 
-    columns, 
-    headers: columns, 
-    preview: previewRows, 
-    rows: previewRows, 
-    totalRows: records.length 
+
+  return {
+    columns,
+    headers: columns,
+    preview: previewRows,
+    rows: previewRows,
+    totalRows: records.length,
   };
 }

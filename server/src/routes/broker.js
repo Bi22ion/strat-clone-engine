@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { encrypt } from '../utils/encryption.js';
 import { testBrokerConnection } from '../services/brokerService.js';
@@ -8,12 +8,13 @@ const router = Router();
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      `SELECT id, broker_name, is_paper_trading, is_active, connection_status, last_tested_at, created_at, updated_at
-       FROM broker_credentials WHERE user_id = $1`,
-      [req.user.id]
-    ).catch(() => ({ rows: [] }));
-    res.json({ credentials: result.rows });
+    const { data, error } = await supabase
+      .from('broker_credentials')
+      .select('id, broker_name, is_paper_trading, is_active, connection_status, last_tested_at, created_at, updated_at')
+      .eq('user_id', req.user.id);
+
+    if (error) throw error;
+    res.json({ credentials: data || [] });
   } catch (err) {
     res.json({ credentials: [] });
   }
@@ -29,23 +30,48 @@ router.post('/', authMiddleware, async (req, res) => {
     const encryptedKey = encrypt(apiKey);
     const encryptedSecret = encrypt(apiSecret);
 
-    const result = await query(
-      `INSERT INTO broker_credentials (user_id, broker_name, api_key_encrypted, api_secret_encrypted, is_paper_trading, is_active)
-       VALUES ($1, $2, $3, $4, $5, true)
-       ON CONFLICT (user_id, broker_name)
-       DO UPDATE SET api_key_encrypted = $3, api_secret_encrypted = $4, is_paper_trading = $5, is_active = true, updated_at = NOW()
-       RETURNING id, broker_name, is_paper_trading, is_active, connection_status, created_at`,
-      [req.user.id, brokerName, encryptedKey, encryptedSecret, isPaperTrading]
-    ).catch(async () => {
-      return await query(
-        `INSERT INTO broker_credentials (user_id, broker_name, api_key_encrypted, api_secret_encrypted, is_active)
-         VALUES ($1, $2, $3, $4, true)
-         RETURNING id, broker_name, is_active, connection_status, created_at`,
-        [req.user.id, brokerName, encryptedKey, encryptedSecret]
-      );
-    });
+    // Try upsert (ON CONFLICT)
+    const { data: existing } = await supabase
+      .from('broker_credentials')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('broker_name', brokerName)
+      .maybeSingle();
 
-    res.status(201).json({ credentials: result.rows[0] });
+    let result;
+    if (existing) {
+      const { data, error } = await supabase
+        .from('broker_credentials')
+        .update({
+          api_key_encrypted: encryptedKey,
+          api_secret_encrypted: encryptedSecret,
+          is_paper_trading: isPaperTrading,
+          is_active: true,
+        })
+        .eq('id', existing.id)
+        .select('id, broker_name, is_paper_trading, is_active, connection_status, created_at');
+      result = { data, error };
+    } else {
+      const { data, error } = await supabase
+        .from('broker_credentials')
+        .insert({
+          user_id: req.user.id,
+          broker_name: brokerName,
+          api_key_encrypted: encryptedKey,
+          api_secret_encrypted: encryptedSecret,
+          is_paper_trading: isPaperTrading,
+          is_active: true,
+        })
+        .select('id, broker_name, is_paper_trading, is_active, connection_status, created_at');
+      result = { data, error };
+    }
+
+    if (result.error) {
+      console.error('Broker save error:', result.error);
+      return res.status(500).json({ error: result.error.message || 'Failed to save credentials' });
+    }
+
+    res.status(201).json({ credentials: result.data[0] });
   } catch (err) {
     console.error('Broker save error:', err);
     res.status(500).json({ error: err.message || 'Failed to save credentials' });
@@ -54,41 +80,42 @@ router.post('/', authMiddleware, async (req, res) => {
 
 router.post('/test', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      'SELECT * FROM broker_credentials WHERE user_id = $1 AND is_active = true LIMIT 1',
-      [req.user.id]
-    ).catch(() => ({ rows: [] }));
+    const { data: creds } = await supabase
+      .from('broker_credentials')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
 
-    if (result.rows.length === 0) {
-      const fallbackResult = await query(
-        'SELECT * FROM broker_credentials WHERE user_id = $1 LIMIT 1',
-        [req.user.id]
-      ).catch(() => ({ rows: [] }));
+    let credentials = creds;
+    if (!credentials) {
+      const { data: fallback } = await supabase
+        .from('broker_credentials')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .limit(1)
+        .maybeSingle();
+      credentials = fallback;
+    }
 
-      if (fallbackResult.rows.length === 0) {
-        return res.status(404).json({ error: 'No active broker credentials found' });
-      }
-      result.rows = fallbackResult.rows;
+    if (!credentials) {
+      return res.status(404).json({ error: 'No active broker credentials found' });
     }
 
     let testResult = { connected: true };
     try {
-      testResult = await testBrokerConnection(result.rows[0]);
+      testResult = await testBrokerConnection(credentials);
     } catch (e) {
       testResult = { connected: false, message: e.message };
     }
 
     const status = testResult.connected ? 'connected' : 'failed';
 
-    await query(
-      `UPDATE broker_credentials SET connection_status = $1, last_tested_at = NOW() WHERE id = $2`,
-      [status, result.rows[0].id]
-    ).catch(async () => {
-      await query(
-        `UPDATE broker_credentials SET connection_status = $1 WHERE id = $2`,
-        [status, result.rows[0].id]
-      ).catch(() => {});
-    });
+    await supabase
+      .from('broker_credentials')
+      .update({ connection_status: status, last_tested_at: new Date().toISOString() })
+      .eq('id', credentials.id);
 
     res.json({ ...testResult, connection_status: status });
   } catch (err) {
@@ -99,22 +126,27 @@ router.post('/test', authMiddleware, async (req, res) => {
 router.patch('/paper-trading', authMiddleware, async (req, res) => {
   try {
     const { isPaperTrading } = req.body;
-    const result = await query(
-      `UPDATE broker_credentials SET is_paper_trading = $1 WHERE user_id = $2 AND is_active = true
-       RETURNING id, is_paper_trading`,
-      [isPaperTrading, req.user.id]
-    ).catch(async () => {
-      return await query(
-        `UPDATE broker_credentials SET is_paper_trading = $1 WHERE user_id = $2
-         RETURNING id, is_paper_trading`,
-        [isPaperTrading, req.user.id]
-      );
-    });
+    const { data, error } = await supabase
+      .from('broker_credentials')
+      .update({ is_paper_trading: isPaperTrading })
+      .eq('user_id', req.user.id)
+      .eq('is_active', true)
+      .select('id, is_paper_trading');
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No active credentials found' });
+    if (error || !data || data.length === 0) {
+      const { data: fallback } = await supabase
+        .from('broker_credentials')
+        .update({ is_paper_trading: isPaperTrading })
+        .eq('user_id', req.user.id)
+        .select('id, is_paper_trading');
+
+      if (!fallback || fallback.length === 0) {
+        return res.status(404).json({ error: 'No active credentials found' });
+      }
+      return res.json({ credentials: fallback[0] });
     }
-    res.json({ credentials: result.rows[0] });
+
+    res.json({ credentials: data[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update paper trading setting' });
   }

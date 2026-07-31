@@ -1,55 +1,58 @@
-import { query } from '../db.js';
-import { spawn } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { supabase } from '../db.js';
 
 export async function trainModelNode(datasetId, userId, modelName) {
-  const trades = await query(
-    `SELECT * FROM parsed_trades WHERE dataset_id = $1 AND user_id = $2 ORDER BY timestamp`,
-    [datasetId, userId]
-  );
+  const { data: trades, error } = await supabase
+    .from('parsed_trades')
+    .select('*')
+    .eq('dataset_id', datasetId)
+    .eq('user_id', userId)
+    .order('timestamp', { ascending: true });
 
-  if (trades.rows.length === 0) {
+  if (error) throw error;
+  if (!trades || trades.length === 0) {
     throw new Error('No parsed trades found for this dataset');
   }
 
-  const modelResult = await query(
-    `INSERT INTO strategy_models (user_id, dataset_id, name, status)
-     VALUES ($1, $2, $3, 'training') RETURNING *`,
-    [userId, datasetId, modelName]
-  );
-  const model = modelResult.rows[0];
+  const { data: model, error: modelError } = await supabase
+    .from('strategy_models')
+    .insert({
+      user_id: userId,
+      dataset_id: datasetId,
+      name: modelName,
+      status: 'training',
+    })
+    .select('*')
+    .single();
+
+  if (modelError) throw modelError;
 
   try {
-    const metrics = extractBehavioralPatterns(trades.rows);
+    const metrics = extractBehavioralPatterns(trades);
 
-    await query(
-      `UPDATE strategy_models SET
-        status = 'ready',
-        win_rate = $1,
-        avg_risk_reward = $2,
-        avg_trade_duration_minutes = $3,
-        preferred_asset_classes = $4,
-        ruleset = $5,
-        metrics = $6
-       WHERE id = $7`,
-      [
-        metrics.winRate,
-        metrics.avgRiskReward,
-        metrics.avgTradeDurationMinutes,
-        JSON.stringify(metrics.preferredAssetClasses),
-        JSON.stringify(metrics.ruleset),
-        JSON.stringify(metrics),
-        model.id,
-      ]
-    );
+    const { error: updateError } = await supabase
+      .from('strategy_models')
+      .update({
+        status: 'ready',
+        win_rate: metrics.winRate,
+        avg_risk_reward: metrics.avgRiskReward,
+        avg_trade_duration_minutes: metrics.avgTradeDurationMinutes,
+        preferred_asset_classes: JSON.stringify(metrics.preferredAssetClasses),
+        ruleset: JSON.stringify(metrics.ruleset),
+        metrics: JSON.stringify(metrics),
+      })
+      .eq('id', model.id);
 
-    const updated = await query('SELECT * FROM strategy_models WHERE id = $1', [model.id]);
-    return updated.rows[0];
+    if (updateError) throw updateError;
+
+    const { data: updated } = await supabase
+      .from('strategy_models')
+      .select('*')
+      .eq('id', model.id)
+      .single();
+
+    return updated;
   } catch (err) {
-    await query(`UPDATE strategy_models SET status = 'failed' WHERE id = $1`, [model.id]);
+    await supabase.from('strategy_models').update({ status: 'failed' }).eq('id', model.id);
     throw err;
   }
 }
@@ -132,30 +135,4 @@ function extractBehavioralPatterns(trades) {
     totalTrades: trades.length,
     ruleset,
   };
-}
-
-export function trainModelPython(datasetId, userId, modelName) {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.join(__dirname, '../../../scripts/train_model.py');
-    const proc = spawn('python', [scriptPath, datasetId, userId, modelName], {
-      env: { ...process.env },
-    });
-
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', (d) => { stdout += d; });
-    proc.stderr.on('data', (d) => { stderr += d; });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        try {
-          resolve(JSON.parse(stdout.trim()));
-        } catch {
-          resolve({ success: true, output: stdout });
-        }
-      } else {
-        reject(new Error(stderr || `Python script exited with code ${code}`));
-      }
-    });
-  });
 }

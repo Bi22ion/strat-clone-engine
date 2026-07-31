@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 
 const router = Router();
@@ -8,21 +8,21 @@ router.get('/summary', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const [models, datasets, broker, bots, logs] = await Promise.all([
-      query(`SELECT COUNT(*) FROM strategy_models WHERE user_id = $1 AND status = 'ready'`, [userId]).catch(() => ({ rows: [{ count: '0' }] })),
-      query(`SELECT COUNT(*) FROM trade_datasets WHERE user_id = $1`, [userId]).catch(() => ({ rows: [{ count: '0' }] })),
-      query(`SELECT connection_status FROM broker_credentials WHERE user_id = $1 LIMIT 1`, [userId]).catch(() => ({ rows: [] })),
-      query(`SELECT COUNT(*) FROM trading_bots WHERE user_id = $1 AND status = 'active'`, [userId]).catch(() => ({ rows: [{ count: '0' }] })),
-      query(`SELECT COUNT(*) FROM execution_logs WHERE user_id = $1`, [userId]).catch(() => ({ rows: [{ count: '0' }] })),
+    const [modelsRes, datasetsRes, brokerRes, botsRes, logsRes] = await Promise.all([
+      supabase.from('strategy_models').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'ready'),
+      supabase.from('trade_datasets').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      supabase.from('broker_credentials').select('connection_status').eq('user_id', userId).limit(1),
+      supabase.from('trading_bots').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
+      supabase.from('execution_logs').select('id', { count: 'exact', head: true }).eq('user_id', userId),
     ]);
 
     res.json({
-      activeModels: parseInt(models.rows[0]?.count || '0', 10),
-      totalDatasets: parseInt(datasets.rows[0]?.count || '0', 10),
-      activeBots: parseInt(bots.rows[0]?.count || '0', 10),
-      executionsToday: parseInt(logs.rows[0]?.count || '0', 10),
+      activeModels: modelsRes.count || 0,
+      totalDatasets: datasetsRes.count || 0,
+      activeBots: botsRes.count || 0,
+      executionsToday: logsRes.count || 0,
       broker: {
-        connection_status: broker.rows[0]?.connection_status || 'disconnected',
+        connection_status: brokerRes.data?.[0]?.connection_status || 'disconnected',
         is_paper_trading: true,
       },
     });

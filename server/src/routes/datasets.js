@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
-import { query } from '../db.js';
+import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { parseAndIngestDataset, getDatasetPreview } from '../services/csvParser.js';
 
@@ -43,55 +43,16 @@ const upload = multer({
 
 const router = Router();
 
-async function ensureDatasetSchema() {
-  await query(`
-    CREATE TABLE IF NOT EXISTS trade_datasets (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      original_filename VARCHAR(255),
-      file_path TEXT,
-      status VARCHAR(20) NOT NULL DEFAULT 'uploaded',
-      column_mapping JSONB,
-      row_count INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => {});
-  
-  // Force user_id to UUID if it was previously created as text or integer
-  await query(`ALTER TABLE trade_datasets ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid`).catch(() => {});
-  await query(`CREATE INDEX IF NOT EXISTS idx_trade_datasets_user ON trade_datasets(user_id)`).catch(() => {});
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS parsed_trades (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      dataset_id UUID NOT NULL,
-      user_id UUID NOT NULL,
-      timestamp TIMESTAMPTZ,
-      symbol VARCHAR(50),
-      entry_price NUMERIC,
-      exit_price NUMERIC,
-      pnl NUMERIC,
-      side VARCHAR(10),
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => {});
-  
-  await query(`ALTER TABLE parsed_trades ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid`).catch(() => {});
-  await query(`CREATE INDEX IF NOT EXISTS idx_parsed_trades_dataset ON parsed_trades(dataset_id)`).catch(() => {});
-}
-
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    await ensureDatasetSchema();
-    const result = await query(
-      `SELECT id, name, original_filename, row_count, status, column_mapping, error_message, created_at
-       FROM trade_datasets WHERE user_id = $1 ORDER BY created_at DESC`,
-      [req.user.id]
-    );
-    res.json({ datasets: result.rows });
+    const { data, error } = await supabase
+      .from('trade_datasets')
+      .select('id, name, original_filename, row_count, status, column_mapping, error_message, created_at')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ datasets: data || [] });
   } catch (err) {
     console.error('Dataset list error:', err);
     res.json({ datasets: [] });
@@ -104,48 +65,45 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    await ensureDatasetSchema();
-
     const { name } = req.body;
     const datasetName = name || req.file.originalname;
 
-    // Insert a real DB record FIRST so we have a valid UUID before parse runs.
-    // Do NOT swallow the error — a fake { id: 1 } here is what causes the parse 404.
-    let result;
-    try {
-      result = await query(
-        `INSERT INTO trade_datasets (user_id, name, original_filename, file_path, status)
-         VALUES ($1, $2, $3, $4, 'uploaded') RETURNING *`,
-        [req.user.id, datasetName, req.file.originalname, req.file.path]
-      );
-    } catch (dbErr) {
-      console.error('Dataset insert failed:', dbErr);
+    const { data: dataset, error } = await supabase
+      .from('trade_datasets')
+      .insert({
+        user_id: req.user.id,
+        name: datasetName,
+        original_filename: req.file.originalname,
+        file_path: req.file.path,
+        status: 'uploaded',
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('Dataset insert failed:', error);
       return res.status(500).json({ error: 'Failed to create dataset record in database' });
     }
-
-    const dataset = result.rows[0];
 
     let rawPreview = { headers: [], rows: [] };
     try {
       rawPreview = await getDatasetPreview(req.file.path);
     } catch (e) {
-      // preview is best-effort; dataset record already exists
+      // preview is best-effort
     }
 
-    // Normalize preview structure to support both keys
     const headers = rawPreview.headers || rawPreview.columns || [];
     const rows = rawPreview.rows || rawPreview.preview || [];
-
-    // Update row_count on the record so the list view is accurate
     const totalRows = rawPreview.totalRows || rows.length;
-    await query('UPDATE trade_datasets SET row_count = $1 WHERE id = $2', [totalRows, dataset.id]).catch(() => {});
+
+    await supabase.from('trade_datasets').update({ row_count: totalRows }).eq('id', dataset.id);
 
     const preview = {
       columns: headers,
       headers: headers,
       preview: rows,
       rows: rows,
-      totalRows
+      totalRows,
     };
 
     res.status(201).json({ dataset: { ...dataset, row_count: totalRows }, preview });
@@ -157,16 +115,17 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 
 router.get('/:id/preview', authMiddleware, async (req, res) => {
   try {
-    await ensureDatasetSchema();
-    const result = await query(
-      'SELECT * FROM trade_datasets WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user.id]
-    );
+    const { data: dataset, error } = await supabase
+      .from('trade_datasets')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
 
-    if (result.rows.length === 0) {
+    if (!dataset) {
       return res.status(404).json({ error: 'Dataset not found' });
     }
-    const dataset = result.rows[0];
+
     let rawPreview = { headers: [], rows: [] };
     try {
       if (dataset.file_path) {
@@ -183,7 +142,7 @@ router.get('/:id/preview', authMiddleware, async (req, res) => {
       headers: headers,
       preview: rows,
       rows: rows,
-      totalRows: rawPreview.totalRows || rows.length
+      totalRows: rawPreview.totalRows || rows.length,
     };
 
     res.json({ dataset, preview });
@@ -199,19 +158,18 @@ router.post('/:id/parse', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Column mappings are required' });
     }
 
-    await ensureDatasetSchema();
+    const { data: dataset, error } = await supabase
+      .from('trade_datasets')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
 
-    const result = await query(
-      'SELECT * FROM trade_datasets WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user.id]
-    );
-
-    if (result.rows.length === 0) {
+    if (!dataset) {
       return res.status(404).json({ error: 'Dataset not found' });
     }
 
-    const dataset = result.rows[0];
-    await query('DELETE FROM parsed_trades WHERE dataset_id = $1', [dataset.id]).catch(() => {});
+    await supabase.from('parsed_trades').delete().eq('dataset_id', dataset.id);
 
     let parseResult = { success: true, validCount: 0, skipped: 0, errors: [] };
     try {
@@ -221,22 +179,26 @@ router.post('/:id/parse', authMiddleware, async (req, res) => {
         dataset.file_path,
         columnMapping
       );
-      // Mark dataset as processed with row count
       const validCount = parseResult.validCount || parseResult.inserted || 0;
-      await query(
-        `UPDATE trade_datasets SET status = 'processed', row_count = $1, column_mapping = $2, error_message = NULL WHERE id = $3`,
-        [validCount, JSON.stringify(columnMapping), dataset.id]
-      ).catch(() => {});
+      await supabase
+        .from('trade_datasets')
+        .update({
+          status: 'processed',
+          row_count: validCount,
+          column_mapping: JSON.stringify(columnMapping),
+          error_message: null,
+        })
+        .eq('id', dataset.id);
     } catch (e) {
       parseResult = { success: false, validCount: 0, skipped: 0, errors: [e.message] };
-      await query(
-        `UPDATE trade_datasets SET status = 'failed', error_message = $1 WHERE id = $2`,
-        [e.message, dataset.id]
-      ).catch(() => {});
+      await supabase
+        .from('trade_datasets')
+        .update({ status: 'failed', error_message: e.message })
+        .eq('id', dataset.id);
     }
 
-    const updated = await query('SELECT * FROM trade_datasets WHERE id = $1', [dataset.id]);
-    res.json({ dataset: updated.rows[0], parseResult });
+    const { data: updated } = await supabase.from('trade_datasets').select('*').eq('id', dataset.id).maybeSingle();
+    res.json({ dataset: updated, parseResult });
   } catch (err) {
     console.error('Parse error:', err);
     res.status(500).json({ error: err.message || 'Parsing failed' });
@@ -245,25 +207,26 @@ router.post('/:id/parse', authMiddleware, async (req, res) => {
 
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await ensureDatasetSchema();
-    const result = await query(
-      'SELECT file_path FROM trade_datasets WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user.id]
-    );
+    const { data: dataset } = await supabase
+      .from('trade_datasets')
+      .select('file_path')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
 
-    if (result.rows.length === 0) {
+    if (!dataset) {
       return res.status(404).json({ error: 'Dataset not found' });
     }
 
-    if (result.rows[0].file_path && fs.existsSync(result.rows[0].file_path)) {
+    if (dataset.file_path && fs.existsSync(dataset.file_path)) {
       try {
-        fs.unlinkSync(result.rows[0].file_path);
+        fs.unlinkSync(dataset.file_path);
       } catch (e) {
         // ignore unlink errors
       }
     }
 
-    await query('DELETE FROM trade_datasets WHERE id = $1', [req.params.id]).catch(() => {});
+    await supabase.from('trade_datasets').delete().eq('id', req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete dataset' });
