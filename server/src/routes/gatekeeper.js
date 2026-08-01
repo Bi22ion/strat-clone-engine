@@ -468,14 +468,13 @@ router.post('/media', authMiddleware, upload.single('file'), async (req, res) =>
   }
 });
 
-// GET /api/gatekeeper/site/:slug — public profile (no auth)
+// GET /api/gatekeeper/site/:slug — public profile (no auth, works for draft + published)
 router.get('/site/:slug', async (req, res) => {
   try {
     const { data: profile } = await supabase
       .from('gatekeeper_profiles')
       .select('*')
       .eq('slug', req.params.slug)
-      .eq('is_published', true)
       .maybeSingle();
 
     if (!profile) return res.status(404).json({ error: 'Site not found' });

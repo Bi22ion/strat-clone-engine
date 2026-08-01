@@ -27,7 +27,7 @@ export async function trainModelNode(datasetId, userId, modelName) {
       const mapping = dataset.column_mapping
         ? (typeof dataset.column_mapping === 'string' ? JSON.parse(dataset.column_mapping) : dataset.column_mapping)
         : {};
-      await parseAndIngestDataset(datasetId, userId, dataset.file_path, mapping);
+      await parseAndIngestDataset(datasetId, userId, dataset.file_path, mapping, dataset.file_content || null);
       const retry = await supabase
         .from('parsed_trades')
         .select('*')

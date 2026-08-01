@@ -26,17 +26,22 @@ export function usePublicSite(username: string) {
   const [profile, setProfile] = useState<GatekeeperProfile | null>(null);
   const [blocks, setBlocks] = useState<GatekeeperBlock[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     gatekeeper.getSite(username)
       .then((data) => {
         setProfile(data.profile);
         setBlocks(data.blocks || []);
       })
-      .catch(() => {})
+      .catch((err) => {
+        setError(err?.message || 'Site not found');
+      })
       .finally(() => setLoading(false));
   }, [username]);
 
   const visibleBlocks = blocks.filter((b) => b.is_visible).sort((a, b) => a.sort_order - b.sort_order);
-  return { profile, blocks: visibleBlocks, loading };
+  return { profile, blocks: visibleBlocks, loading, error };
 }

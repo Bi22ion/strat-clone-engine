@@ -44,11 +44,14 @@ function inferAssetClass(symbol) {
   return 'equity';
 }
 
-export async function parseAndIngestDataset(datasetId, userId, filePath, columnMapping) {
-  const fileContent = fs.readFileSync(filePath, 'utf8');
-  const filename = columnMapping.__filename || filePath;
-  const delimiter = detectDelimiter(fileContent, filename);
-  const records = parse(fileContent, {
+export async function parseAndIngestDataset(datasetId, userId, filePath, columnMapping, fileContent = null) {
+  const content = fileContent || (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null);
+  if (!content) {
+    throw new Error('Dataset file not found. Please re-upload the CSV file.');
+  }
+  const filename = columnMapping?.__filename || filePath;
+  const delimiter = detectDelimiter(content, filename);
+  const records = parse(content, {
     columns: (header) => header.map(h => String(h).replace(/^\uFEFF/, '').trim()),
     delimiter,
     skip_empty_lines: true,
@@ -172,8 +175,28 @@ function autoDetectColumns(mapping, columns) {
   return result;
 }
 
+export async function getDatasetPreviewFromContent(content, maxRows = 5) {
+  const delimiter = detectDelimiter(content, 'preview.csv');
+  const records = parse(content, {
+    columns: (header) => header.map(h => String(h).replace(/^\uFEFF/, '').trim()),
+    delimiter,
+    skip_empty_lines: true,
+    trim: true,
+    relax_column_count: true,
+  });
+  const columns = records.length > 0 ? Object.keys(records[0]) : [];
+  const previewRows = records.slice(0, maxRows);
+  return {
+    columns,
+    headers: columns,
+    preview: previewRows,
+    rows: previewRows,
+    totalRows: records.length,
+  };
+}
+
 export async function getDatasetPreview(filePath, maxRows = 5) {
-  const fileContent = fs.readFileSync(filePath, 'utf8');
+  const fileContent = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
   const delimiter = detectDelimiter(fileContent, filePath);
   const records = parse(fileContent, {
     columns: (header) => header.map(h => String(h).replace(/^\uFEFF/, '').trim()),

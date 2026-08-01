@@ -24,7 +24,7 @@ const PLANS: PlanTier[] = [
   { tier: 'free', name: 'Free', price: 0, period: 'forever', features: ['1 trading model', 'Basic dashboard', 'Public website', 'Community support'] },
   { tier: 'weekly', name: 'Weekly', price: 999, period: '/week', features: ['Unlimited models', 'Live broker sync', 'AI Optimizer', 'Priority support', 'Custom branding'] },
   { tier: 'monthly', name: 'Monthly', price: 2999, period: '/month', features: ['Everything in Weekly', 'Advanced analytics', 'Client billing portal', 'API access', 'Email support'] },
-  { tier: 'yearly', name: 'Yearly', price: 29999, period: '/year', features: ['Everything in Monthly', '2 months free', 'Dedicated account manager', 'White-label option', '24/7 phone support'], popular: true },
+  { tier: 'yearly', name: 'Yearly', price: 2999 * 10, period: '/year', features: ['Everything in Monthly', '2 months FREE (pay for 10)', 'Dedicated account manager', 'White-label option', '24/7 phone support'], popular: true },
 ];
 
 const SOCIAL_PLATFORMS = ['twitter', 'telegram', 'github', 'linkedin', 'youtube', 'instagram', 'facebook', 'tiktok', 'discord'];

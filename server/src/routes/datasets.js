@@ -68,6 +68,8 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
     const { name } = req.body;
     const datasetName = name || req.file.originalname;
 
+    const fileContent = fs.readFileSync(req.file.path, 'utf8');
+
     const { data: dataset, error } = await supabase
       .from('trade_datasets')
       .insert({
@@ -75,6 +77,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
         name: datasetName,
         original_filename: req.file.originalname,
         file_path: req.file.path,
+        file_content: fileContent,
         status: 'uploaded',
       })
       .select('*')
@@ -128,7 +131,9 @@ router.get('/:id/preview', authMiddleware, async (req, res) => {
 
     let rawPreview = { headers: [], rows: [] };
     try {
-      if (dataset.file_path) {
+      if (dataset.file_content) {
+        rawPreview = await getDatasetPreviewFromContent(dataset.file_content);
+      } else if (dataset.file_path && fs.existsSync(dataset.file_path)) {
         rawPreview = await getDatasetPreview(dataset.file_path);
       }
     } catch (e) {
@@ -177,7 +182,8 @@ router.post('/:id/parse', authMiddleware, async (req, res) => {
         dataset.id,
         req.user.id,
         dataset.file_path,
-        columnMapping
+        columnMapping,
+        dataset.file_content || null
       );
       const validCount = parseResult.validCount || parseResult.inserted || 0;
       await supabase

@@ -2,16 +2,31 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Play, TrendingUp, ChartBar as BarChart3, Video, Sparkles, CircleCheck as CheckCircle } from 'lucide-react';
+import { ArrowRight, Play, TrendingUp, ChartBar as BarChart3, Video, Sparkles, CircleCheck as CheckCircle, Globe } from 'lucide-react';
 import { usePublicSite, parseTheme } from './usePublicSite';
 
 export default function HomePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
-  const { profile, blocks, loading } = usePublicSite(username);
+  const { profile, blocks, loading, error } = usePublicSite(username);
   const { primary } = parseTheme(profile);
 
-  if (loading || !profile) {
+  if (loading) {
     return <div className="min-h-[60vh] flex items-center justify-center"><div className="w-8 h-8 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" /></div>;
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-zinc-100 flex items-center justify-center mb-4">
+          <Globe className="w-8 h-8 text-zinc-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-zinc-900 mb-2">Site Not Found</h1>
+        <p className="text-zinc-500 max-w-md">The page <span className="font-mono text-zinc-700">/{username}</span> doesn&apos;t exist yet. If you&apos;re the owner, make sure your profile is set up from the dashboard.</p>
+        <Link href="/dashboard/profile" className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 text-white font-medium hover:bg-zinc-800 transition-colors">
+          Go to Dashboard
+        </Link>
+      </div>
+    );
   }
 
   const heroBlock = blocks.find((b) => b.block_type === 'hero');
