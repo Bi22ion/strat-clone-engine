@@ -6,28 +6,10 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { parseAndIngestDataset, getDatasetPreview } from '../services/csvParser.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadsDir = path.join(__dirname, '../../uploads');
-
-if (!fs.existsSync(uploadsDir)) {
-  try {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  } catch (e) {
-    // ignore directory creation errors
-  }
-}
-
-const storage = multer.diskStorage({
-  destination: uploadsDir,
-  filename: (_req, file, cb) => {
-    cb(null, `${uuidv4()}${path.extname(file.originalname)}`);
-  },
-});
+import { parseAndIngestDataset, getDatasetPreview, getDatasetPreviewFromContent } from '../services/csvParser.js';
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -68,7 +50,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
     const { name } = req.body;
     const datasetName = name || req.file.originalname;
 
-    const fileContent = fs.readFileSync(req.file.path, 'utf8');
+    const fileContent = req.file.buffer.toString('utf8');
 
     const { data: dataset, error } = await supabase
       .from('trade_datasets')
@@ -76,7 +58,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
         user_id: req.user.id,
         name: datasetName,
         original_filename: req.file.originalname,
-        file_path: req.file.path,
+        file_path: null,
         file_content: fileContent,
         status: 'uploaded',
       })
@@ -84,13 +66,13 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
       .single();
 
     if (error) {
-      console.error('Dataset insert failed:', error);
-      return res.status(500).json({ error: 'Failed to create dataset record in database' });
+      console.error('Dataset insert failed:', JSON.stringify(error, null, 2));
+      return res.status(500).json({ error: `Database insert failed: ${error.message || error.details || 'Unknown error'}` });
     }
 
     let rawPreview = { headers: [], rows: [] };
     try {
-      rawPreview = await getDatasetPreview(req.file.path);
+      rawPreview = await getDatasetPreviewFromContent(fileContent);
     } catch (e) {
       // preview is best-effort
     }
@@ -181,7 +163,7 @@ router.post('/:id/parse', authMiddleware, async (req, res) => {
       parseResult = await parseAndIngestDataset(
         dataset.id,
         req.user.id,
-        dataset.file_path,
+        dataset.file_path || null,
         columnMapping,
         dataset.file_content || null
       );

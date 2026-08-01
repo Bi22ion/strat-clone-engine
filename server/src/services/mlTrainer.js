@@ -23,11 +23,11 @@ export async function trainModelNode(datasetId, userId, modelName) {
 
   if (!trades || trades.length === 0) {
     const { parseAndIngestDataset } = await import('./csvParser.js');
-    if (dataset.file_path) {
+    if (dataset.file_content || dataset.file_path) {
       const mapping = dataset.column_mapping
         ? (typeof dataset.column_mapping === 'string' ? JSON.parse(dataset.column_mapping) : dataset.column_mapping)
         : {};
-      await parseAndIngestDataset(datasetId, userId, dataset.file_path, mapping, dataset.file_content || null);
+      await parseAndIngestDataset(datasetId, userId, dataset.file_path || null, mapping, dataset.file_content || null);
       const retry = await supabase
         .from('parsed_trades')
         .select('*')
