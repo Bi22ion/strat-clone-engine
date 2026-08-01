@@ -86,7 +86,7 @@ router.post('/train', authMiddleware, async (req, res) => {
     try {
       model = await trainModelNode(datasetId, req.user.id, modelName);
     } catch (e) {
-      const { data: fallback } = await supabase
+      const { data: fallback, error: insertError } = await supabase
         .from('strategy_models')
         .insert({
           user_id: req.user.id,
@@ -97,7 +97,10 @@ router.post('/train', authMiddleware, async (req, res) => {
         })
         .select('*')
         .single();
-      model = fallback || { id: '1', name: modelName, status: 'ready' };
+      if (insertError || !fallback) {
+        throw new Error(e?.message || insertError?.message || 'Training failed');
+      }
+      model = fallback;
     }
 
     res.status(201).json({ model });

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Zap, LayoutDashboard, Database, Brain, Link2, Bot, LogOut,
+  Zap, LayoutDashboard, Database, Brain, Link2, Bot, LogOut, User,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuthGuard, logout, getUser } from '@/lib/auth';
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/dashboard/models', label: 'Models', icon: Brain },
   { href: '/dashboard/broker', label: 'Broker', icon: Link2 },
   { href: '/dashboard/bots', label: 'Bots', icon: Bot },
+  { href: '/dashboard/profile', label: 'Profile', icon: User },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

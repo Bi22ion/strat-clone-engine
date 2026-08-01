@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Bot, Play, Square, AlertTriangle, Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { bots, models, TradingBot, ExecutionLog, StrategyModel } from '@/lib/api';
@@ -138,10 +139,19 @@ export default function BotsPage() {
               <label className="label">Strategy Model</label>
               <select className="input-field" value={newBot.modelId} onChange={(e) => setNewBot({ ...newBot, modelId: e.target.value })}>
                 <option value="">Select model</option>
-                {modelList.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name} ({m.win_rate}% WR)</option>
-                ))}
+                {modelList.length === 0 ? (
+                  <option value="" disabled>No models trained yet — train one in the Models page first</option>
+                ) : (
+                  modelList.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.win_rate}% WR)</option>
+                  ))
+                )}
               </select>
+              {modelList.length === 0 && (
+                <Link href="/dashboard/models" className="text-xs text-accent-cyan hover:underline mt-1 inline-block">
+                  Go to Models page to train a model →
+                </Link>
+              )}
             </div>
             <div>
               <label className="label">Bot Name</label>
