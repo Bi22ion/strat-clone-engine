@@ -1,7 +1,18 @@
 import { supabase } from '../db.js';
 
 export async function trainModelNode(datasetId, userId, modelName) {
-  const { data: trades, error } = await supabase
+  const { data: dataset, error: dsError } = await supabase
+    .from('trade_datasets')
+    .select('*')
+    .eq('id', datasetId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (dsError || !dataset) {
+    throw new Error('Dataset not found');
+  }
+
+  let { data: trades, error } = await supabase
     .from('parsed_trades')
     .select('*')
     .eq('dataset_id', datasetId)
@@ -9,8 +20,27 @@ export async function trainModelNode(datasetId, userId, modelName) {
     .order('timestamp', { ascending: true });
 
   if (error) throw error;
+
   if (!trades || trades.length === 0) {
-    throw new Error('No parsed trades found for this dataset');
+    const { parseAndIngestDataset } = await import('./csvParser.js');
+    if (dataset.file_path) {
+      const mapping = dataset.column_mapping
+        ? (typeof dataset.column_mapping === 'string' ? JSON.parse(dataset.column_mapping) : dataset.column_mapping)
+        : {};
+      await parseAndIngestDataset(datasetId, userId, dataset.file_path, mapping);
+      const retry = await supabase
+        .from('parsed_trades')
+        .select('*')
+        .eq('dataset_id', datasetId)
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: true });
+      trades = retry.data;
+      if (retry.error) throw retry.error;
+    }
+  }
+
+  if (!trades || trades.length === 0) {
+    throw new Error('No parsed trades found for this dataset — try re-parsing the CSV');
   }
 
   const { data: model, error: modelError } = await supabase

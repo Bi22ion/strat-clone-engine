@@ -81,7 +81,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const {
       display_name, tagline, bio, avatar_url, cover_url,
-      is_published, template, social_links, theme, slug,
+      is_published, template, social_links, theme, slug, metadata,
     } = req.body;
 
     const { data: existing } = await supabase
@@ -110,6 +110,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
     if (social_links !== undefined) updates.social_links = typeof social_links === 'string' ? social_links : JSON.stringify(social_links);
     if (theme !== undefined) updates.theme = typeof theme === 'string' ? theme : JSON.stringify(theme);
     if (slug !== undefined) updates.slug = slugify(slug);
+    if (metadata !== undefined) updates.metadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
 
     const { data, error } = await supabase
       .from('gatekeeper_profiles')
@@ -353,6 +354,52 @@ router.delete('/messages/:id', authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// POST /api/gatekeeper/messages/:id/reply — owner replies to a client message
+router.post('/messages/:id/reply', authMiddleware, async (req, res) => {
+  try {
+    const { reply_text } = req.body;
+    if (!reply_text || !reply_text.trim()) {
+      return res.status(400).json({ error: 'Reply text is required' });
+    }
+
+    const { data: profile } = await supabase
+      .from('gatekeeper_profiles')
+      .select('id')
+      .eq('owner_id', req.user.id)
+      .maybeSingle();
+
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+
+    const { data: msg } = await supabase
+      .from('gatekeeper_messages')
+      .select('id, replies')
+      .eq('id', req.params.id)
+      .eq('profile_id', profile.id)
+      .maybeSingle();
+
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+
+    let replies = [];
+    if (msg.replies) {
+      try { replies = typeof msg.replies === 'string' ? JSON.parse(msg.replies) : msg.replies; } catch { replies = []; }
+    }
+    replies.push({ text: String(reply_text).slice(0, 5000), sent_at: new Date().toISOString() });
+
+    const { data: updated, error } = await supabase
+      .from('gatekeeper_messages')
+      .update({ replies: JSON.stringify(replies), is_read: true })
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    res.json({ message: updated });
+  } catch (err) {
+    console.error('Reply error:', err);
+    res.status(500).json({ error: 'Failed to send reply' });
   }
 });
 

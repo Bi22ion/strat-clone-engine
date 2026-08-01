@@ -257,6 +257,7 @@ export interface GatekeeperProfile {
   template: string;
   social_links: Record<string, string> | string;
   theme: GatekeeperTheme | string;
+  metadata?: Record<string, unknown> | string;
   created_at: string;
   updated_at: string;
 }
@@ -346,6 +347,11 @@ export const gatekeeper = {
   getMessages: () => api<{ messages: GatekeeperMessage[] }>('/gatekeeper/messages'),
   markMessageRead: (id: string) =>
     api<{ success: boolean }>(`/gatekeeper/messages/${id}/read`, { method: 'PUT' }),
+  replyToMessage: (id: string, replyText: string) =>
+    api<{ message: GatekeeperMessage }>(`/gatekeeper/messages/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ reply_text: replyText }),
+    }),
   deleteMessage: (id: string) =>
     api<{ success: boolean }>(`/gatekeeper/messages/${id}`, { method: 'DELETE' }),
 };
@@ -369,6 +375,7 @@ export interface GatekeeperMessage {
   page: string;
   is_read: boolean;
   created_at: string;
+  replies?: { text: string; sent_at: string }[];
 }
 
 export interface LiveStock {

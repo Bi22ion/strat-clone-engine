@@ -60,18 +60,12 @@ export async function parseAndIngestDataset(datasetId, userId, filePath, columnM
     throw new Error('CSV file contains no data rows');
   }
 
-  const {
-    timestamp: tsCol,
-    symbol: symCol,
-    entry_price: entryCol,
-    exit_price: exitCol,
-    pnl: pnlCol,
-    side: sideCol,
-  } = columnMapping;
+  const columns = records.length > 0 ? Object.keys(records[0]) : [];
+  const resolvedMapping = autoDetectColumns(columnMapping || {}, columns);
 
   await supabase
     .from('trade_datasets')
-    .update({ status: 'processing', column_mapping: JSON.stringify(columnMapping) })
+    .update({ status: 'processing', column_mapping: JSON.stringify(resolvedMapping) })
     .eq('id', datasetId);
 
   let validCount = 0;
@@ -80,12 +74,12 @@ export async function parseAndIngestDataset(datasetId, userId, filePath, columnM
 
   for (let i = 0; i < records.length; i++) {
     const row = records[i];
-    const timestamp = parseTimestamp(row[tsCol]);
-    const symbol = String(row[symCol] || '').toUpperCase().trim();
-    const entryPrice = parseNumber(row[entryCol]);
-    const exitPrice = parseNumber(row[exitCol]);
-    let pnl = pnlCol ? parseNumber(row[pnlCol]) : null;
-    const side = sideCol ? String(row[sideCol] || '').toLowerCase() : null;
+    const timestamp = parseTimestamp(row[resolvedMapping.timestamp]);
+    const symbol = String(row[resolvedMapping.symbol] || '').toUpperCase().trim();
+    const entryPrice = parseNumber(row[resolvedMapping.entry_price]);
+    const exitPrice = parseNumber(row[resolvedMapping.exit_price]);
+    let pnl = resolvedMapping.pnl ? parseNumber(row[resolvedMapping.pnl]) : null;
+    const side = resolvedMapping.side ? String(row[resolvedMapping.side] || '').toLowerCase() : null;
 
     if (!timestamp) {
       errors.push(`Row ${i + 2}: Invalid timestamp`);
@@ -153,6 +147,29 @@ export async function parseAndIngestDataset(datasetId, userId, filePath, columnM
     .eq('id', datasetId);
 
   return { validCount, skipped: errors.length, errors: errors.slice(0, 10) };
+}
+
+function autoDetectColumns(mapping, columns) {
+  const lowerColumns = columns.map((c) => String(c).toLowerCase().trim());
+  const findCol = (patterns) => {
+    for (const pat of patterns) {
+      const regex = typeof pat === 'string' ? new RegExp(pat, 'i') : pat;
+      const idx = lowerColumns.findIndex((c) => regex.test(c));
+      if (idx >= 0) return columns[idx];
+    }
+    return null;
+  };
+
+  const result = {
+    timestamp: mapping.timestamp || findCol([/^date$/, /^time$/, /^timestamp$/, /^date_?time$/, /^date_?time$/]) || (columns[0] || ''),
+    symbol: mapping.symbol || findCol([/^symbol$/, /^ticker$/, /^pair$/, /^instrument$/, /^asset$/]) || (columns[1] || ''),
+    entry_price: mapping.entry_price || findCol([/^entry$/, /^entry_?price$/, /^open$/, /^buy_?price$/, /^price$/, /^open_?price$/]) || (columns[2] || ''),
+    exit_price: mapping.exit_price || findCol([/^exit$/, /^exit_?price$/, /^close$/, /^sell_?price$/, /^close_?price$/, /^final_?price$/]) || (columns[3] || ''),
+    pnl: mapping.pnl || findCol([/^pnl$/, /^profit$/, /^gain$/, /^loss$/, /^net$/, /^result$/, /^p_?l$/, /^profit_?loss$/]) || null,
+    side: mapping.side || findCol([/^side$/, /^action$/, /^type$/, /^direction$/, /^buy_?sell$/, /^long_?short$/]) || null,
+  };
+
+  return result;
 }
 
 export async function getDatasetPreview(filePath, maxRows = 5) {
