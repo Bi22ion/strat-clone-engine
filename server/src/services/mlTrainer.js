@@ -1,4 +1,5 @@
 import { supabase } from '../db.js';
+import { parseTradesFromCSV } from './csvParser.js';
 
 export async function trainModelNode(datasetId, userId, modelName) {
   const { data: dataset, error: dsError } = await supabase
@@ -21,26 +22,39 @@ export async function trainModelNode(datasetId, userId, modelName) {
 
   if (error) throw error;
 
+  // FALLBACK: If no parsed_trades in the database, parse the CSV in memory.
+  // This handles the case where the parse step was skipped, failed, or the
+  // table was empty. We parse the raw CSV text and use the trades directly.
   if (!trades || trades.length === 0) {
-    const { parseAndIngestDataset } = await import('./csvParser.js');
-    if (dataset.file_content || dataset.file_path) {
+    const csvContent = dataset.file_content || null;
+    if (csvContent) {
       const mapping = dataset.column_mapping
         ? (typeof dataset.column_mapping === 'string' ? JSON.parse(dataset.column_mapping) : dataset.column_mapping)
         : {};
-      await parseAndIngestDataset(datasetId, userId, dataset.file_path || null, mapping, dataset.file_content || null);
-      const retry = await supabase
-        .from('parsed_trades')
-        .select('*')
-        .eq('dataset_id', datasetId)
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: true });
-      trades = retry.data;
-      if (retry.error) throw retry.error;
+      const parsed = parseTradesFromCSV(csvContent, mapping);
+      if (parsed.length > 0) {
+        // Persist the parsed trades so future requests find them in the DB
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < parsed.length; i += BATCH_SIZE) {
+          const batch = parsed.slice(i, i + BATCH_SIZE).map((t) => ({
+            dataset_id: datasetId,
+            user_id: userId,
+            ...t,
+          }));
+          await supabase.from('parsed_trades').insert(batch).then(({ error: ie }) => {
+            if (ie) console.error('Fallback insert batch error:', ie);
+          });
+        }
+        trades = parsed.map((t) => ({ ...t, dataset_id: datasetId, user_id: userId }));
+      }
     }
   }
 
   if (!trades || trades.length === 0) {
-    throw new Error('No parsed trades found for this dataset — try re-parsing the CSV');
+    throw new Error(
+      'No parsed trades found for this dataset. The CSV file content is missing or has no valid trade rows. ' +
+      'Try re-uploading the dataset and parsing it before training.'
+    );
   }
 
   const { data: model, error: modelError } = await supabase

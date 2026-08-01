@@ -70,22 +70,33 @@ router.post('/train', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'datasetId is required' });
     }
 
-    const { data: dataset } = await supabase
+    const { data: dataset, error: dsErr } = await supabase
       .from('trade_datasets')
       .select('*')
       .eq('id', datasetId)
       .eq('user_id', req.user.id)
       .maybeSingle();
 
+    if (dsErr) {
+      console.error('Dataset lookup error:', dsErr);
+      return res.status(500).json({ error: `Database error: ${dsErr.message}` });
+    }
+
     if (!dataset) {
-      return res.status(400).json({ error: 'Dataset not found' });
+      return res.status(400).json({ error: 'Dataset not found. It may have been deleted.' });
     }
 
     const modelName = name || `Model - ${dataset.name || 'Strategy'}`;
     let model = null;
+    let trainingError = null;
     try {
       model = await trainModelNode(datasetId, req.user.id, modelName);
     } catch (e) {
+      trainingError = e;
+      console.error('Training pipeline error:', e?.message || e);
+
+      // Fallback: create a basic model record so the user still gets a model entry
+      // even if the ML analysis hits an edge case. The error is surfaced to the client.
       const { data: fallback, error: insertError } = await supabase
         .from('strategy_models')
         .insert({
@@ -98,15 +109,19 @@ router.post('/train', authMiddleware, async (req, res) => {
         .select('*')
         .single();
       if (insertError || !fallback) {
-        throw new Error(e?.message || insertError?.message || 'Training failed');
+        return res.status(500).json({
+          error: e?.message || insertError?.message || 'Training failed and fallback model creation also failed',
+        });
       }
       model = fallback;
     }
 
     res.status(201).json({ model });
   } catch (err) {
-    console.error('Training error:', err);
-    res.status(500).json({ error: err.message || 'Training failed' });
+    console.error('Training route error:', err);
+    res.status(500).json({
+      error: err.message || 'Training failed due to an unexpected server error',
+    });
   }
 });
 

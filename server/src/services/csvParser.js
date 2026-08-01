@@ -164,15 +164,80 @@ function autoDetectColumns(mapping, columns) {
   };
 
   const result = {
-    timestamp: mapping.timestamp || findCol([/^date$/, /^time$/, /^timestamp$/, /^date_?time$/, /^date_?time$/]) || (columns[0] || ''),
-    symbol: mapping.symbol || findCol([/^symbol$/, /^ticker$/, /^pair$/, /^instrument$/, /^asset$/]) || (columns[1] || ''),
-    entry_price: mapping.entry_price || findCol([/^entry$/, /^entry_?price$/, /^open$/, /^buy_?price$/, /^price$/, /^open_?price$/]) || (columns[2] || ''),
-    exit_price: mapping.exit_price || findCol([/^exit$/, /^exit_?price$/, /^close$/, /^sell_?price$/, /^close_?price$/, /^final_?price$/]) || (columns[3] || ''),
-    pnl: mapping.pnl || findCol([/^pnl$/, /^profit$/, /^gain$/, /^loss$/, /^net$/, /^result$/, /^p_?l$/, /^profit_?loss$/]) || null,
-    side: mapping.side || findCol([/^side$/, /^action$/, /^type$/, /^direction$/, /^buy_?sell$/, /^long_?short$/]) || null,
+    timestamp: mapping.timestamp || findCol([
+      /^date$/, /^time$/, /^timestamp$/, /^date_?time$/, /^date_?time$/, /^trade_?date$/, /^exec_?time$/,
+      /^filled_?time$/, /^transaction_?time$/, /^created_?at$/,
+    ]) || (columns[0] || ''),
+    symbol: mapping.symbol || findCol([
+      /^symbol$/, /^ticker$/, /^pair$/, /^instrument$/, /^asset$/, /^stock$/, /^contract$/,
+    ]) || (columns[1] || ''),
+    entry_price: mapping.entry_price || findCol([
+      /^entry$/, /^entry_?price$/, /^open$/, /^buy_?price$/, /^price$/, /^open_?price$/,
+      /^fill_?price$/, /^exec_?price$/, /^average_?price$/, /^avg_?price$/,
+    ]) || (columns[2] || ''),
+    exit_price: mapping.exit_price || findCol([
+      /^exit$/, /^exit_?price$/, /^close$/, /^sell_?price$/, /^close_?price$/, /^final_?price$/,
+      /^exit_?fill$/, /^closing_?price$/,
+    ]) || (columns[3] || ''),
+    pnl: mapping.pnl || findCol([
+      /^pnl$/, /^profit$/, /^gain$/, /^loss$/, /^net$/, /^result$/, /^p_?l$/, /^profit_?loss$/,
+      /^realized_?pnl$/, /^unrealized_?pnl$/, /^net_?pnl$/, /^p&l$/,
+    ]) || null,
+    side: mapping.side || findCol([
+      /^side$/, /^action$/, /^type$/, /^direction$/, /^buy_?sell$/, /^long_?short$/,
+      /^order_?type$/, /^transaction_?type$/,
+    ]) || null,
   };
 
   return result;
+}
+
+export function parseTradesFromCSV(fileContent, columnMapping = {}) {
+  const delimiter = detectDelimiter(fileContent, columnMapping.__filename || 'data.csv');
+  const records = parse(fileContent, {
+    columns: (header) => header.map((h) => String(h).replace(/^\uFEFF/, '').trim()),
+    delimiter,
+    skip_empty_lines: true,
+    trim: true,
+    relax_column_count: true,
+  });
+
+  if (records.length === 0) return [];
+
+  const columns = Object.keys(records[0]);
+  const resolved = autoDetectColumns(columnMapping || {}, columns);
+  const trades = [];
+
+  for (let i = 0; i < records.length; i++) {
+    const row = records[i];
+    const timestamp = parseTimestamp(row[resolved.timestamp]);
+    const symbol = String(row[resolved.symbol] || '').toUpperCase().trim();
+    const entryPrice = parseNumber(row[resolved.entry_price]);
+    const exitPrice = parseNumber(row[resolved.exit_price]);
+    let pnl = resolved.pnl ? parseNumber(row[resolved.pnl]) : null;
+    const side = resolved.side ? String(row[resolved.side] || '').toLowerCase() : null;
+
+    if (!timestamp || !symbol || !SYMBOL_REGEX.test(symbol)) continue;
+    if (entryPrice === null || entryPrice <= 0) continue;
+    if (exitPrice === null || exitPrice <= 0) continue;
+
+    if (pnl === null) {
+      pnl = exitPrice - entryPrice;
+    }
+
+    trades.push({
+      timestamp,
+      symbol,
+      entry_price: entryPrice,
+      exit_price: exitPrice,
+      pnl,
+      side,
+      duration_minutes: 0,
+      asset_class: inferAssetClass(symbol),
+    });
+  }
+
+  return trades;
 }
 
 export async function getDatasetPreviewFromContent(content, maxRows = 5) {
