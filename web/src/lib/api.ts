@@ -1,4 +1,9 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const API_URL = configuredApiUrl ? configuredApiUrl.replace(/\/$/, '') : '/api';
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -46,7 +51,7 @@ export const auth = {
   login: (email: string, password: string) =>
     api<{ user: User; token: string }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: normalizeEmail(email), password }),
     }),
 
   me: () => api<{ user: User }>('/auth/me'),

@@ -57,18 +57,24 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { email, password } = req.body ?? {};
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!normalizedEmail || typeof password !== 'string' || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     const { data: user, error } = await supabase
       .from('users')
-      .select('*')
-      .eq('email', email.toLowerCase())
+      .select('id, email, password_hash, full_name, created_at')
+      .eq('email', normalizedEmail)
       .maybeSingle();
 
-    if (!user) {
+    if (error) {
+      console.error('Login user lookup error:', error);
+      return res.status(503).json({ error: 'Authentication service unavailable' });
+    }
+
+    if (!user || typeof user.password_hash !== 'string') {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
