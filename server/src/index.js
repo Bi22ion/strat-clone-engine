@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -53,6 +54,7 @@ app.options('*', cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'Strat-Clone Engine API', timestamp: new Date().toISOString() });

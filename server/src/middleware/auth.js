@@ -13,11 +13,14 @@ export function verifyToken(token) {
 
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const cookieToken = req.cookies?.strat_token;
+  const token = bearerToken || cookieToken;
+
+  if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
   try {
-    const token = authHeader.slice(7);
     req.user = verifyToken(token);
     next();
   } catch {

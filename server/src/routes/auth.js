@@ -84,6 +84,13 @@ router.post('/login', async (req, res) => {
     }
 
     const token = signToken({ id: user.id, email: user.email });
+    res.cookie('strat_token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
     res.json({
       user: { id: user.id, email: user.email, full_name: user.full_name, created_at: user.created_at },
       token,
