@@ -23,7 +23,6 @@ export default function GiftWebsitePreview() {
   useEffect(() => {
     gatekeeper.getProfile()
       .then((data: any) => {
-        // Handles both nested structures and direct flat responses securely
         const p = data?.profile || data;
         const b = data?.blocks || [];
         setProfile(p);
@@ -37,15 +36,17 @@ export default function GiftWebsitePreview() {
   }, []);
 
   const { primary } = profile ? parseTheme(profile) : { primary: '#10b981' };
-  
-  // Robust fallback: uses profile slug, owner_id, or display_name fallback to ensure buttons always appear
   const identifier = profile?.slug || profile?.owner_id || (profile?.display_name ? profile.display_name.toLowerCase().replace(/\s+/g, '-') : '');
+  const safeIdentifier = String(identifier || '').trim();
 
   const heroBlock = blocks.find((b) => b.block_type === 'hero');
   const statsBlock = blocks.find((b) => b.block_type === 'stats');
   const videoBlock = blocks.find((b) => b.block_type === 'video');
   const ctaBlock = blocks.find((b) => b.block_type === 'cta');
   const published = profile?.is_published;
+
+  const publicSiteHref = safeIdentifier ? `/${safeIdentifier}` : '#';
+  const studioHref = safeIdentifier ? `/${safeIdentifier}/gatekeeper` : '#';
 
   return (
     <div className="card-hover group">
@@ -59,11 +60,8 @@ export default function GiftWebsitePreview() {
             <p className="text-xs text-zinc-500">Promote your trades 24/7</p>
           </div>
         </div>
-        {identifier && (
-          <Link
-            href={`/${identifier}/gatekeeper`}
-            className="text-xs text-accent-cyan hover:underline flex items-center gap-1 transition-opacity"
-          >
+        {safeIdentifier && (
+          <Link href={studioHref} className="text-xs text-accent-cyan hover:underline flex items-center gap-1 transition-opacity">
             Customize <ExternalLink className="w-3 h-3" />
           </Link>
         )}
@@ -75,7 +73,7 @@ export default function GiftWebsitePreview() {
           <span className="w-2 h-2 rounded-full bg-amber-500/70" />
           <span className="w-2 h-2 rounded-full bg-emerald-500/70" />
           <span className="ml-2 text-[10px] text-zinc-500 font-mono truncate">
-            {identifier ? `strat-clone.app/${identifier}` : 'loading…'}
+            {safeIdentifier ? `strat-clone.app/${safeIdentifier}` : 'loading…'}
           </span>
           {published && (
             <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 flex items-center gap-1">
@@ -98,15 +96,10 @@ export default function GiftWebsitePreview() {
           ) : (
             <div className="p-4">
               <div className="mb-4">
-                <div
-                  className="h-16 rounded-md mb-3 flex items-center justify-center"
-                  style={{ background: `linear-gradient(135deg, ${primary}33, ${primary}11)` }}
-                >
+                <div className="h-16 rounded-md mb-3 flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primary}33, ${primary}11)` }}>
                   <Globe className="w-6 h-6" style={{ color: primary }} />
                 </div>
-                <h4 className="font-bold text-sm">
-                  {profile?.display_name || 'Your Name'}
-                </h4>
+                <h4 className="font-bold text-sm">{profile?.display_name || 'Your Name'}</h4>
                 <p className="text-xs text-zinc-400">{profile?.tagline || 'Your tagline here'}</p>
               </div>
 
@@ -137,13 +130,8 @@ export default function GiftWebsitePreview() {
                 </div>
               )}
 
-              {/* Direct clickable action button taking users straight to their site */}
-              {identifier && (
-                <Link
-                  href={`/${identifier}`}
-                  className="w-full py-2.5 rounded-md text-xs font-medium text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-2 mb-3 shadow-md"
-                  style={{ background: primary }}
-                >
+              {safeIdentifier && (
+                <Link href={publicSiteHref} className="w-full py-2.5 rounded-md text-xs font-medium text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-2 mb-3 shadow-md" style={{ background: primary }}>
                   <ExternalLink className="w-3.5 h-3.5" /> Launch Gift Website
                 </Link>
               )}
@@ -159,20 +147,13 @@ export default function GiftWebsitePreview() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
-        {identifier && (
-          <Link
-            href={`/${identifier}`}
-            target="_blank"
-            className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-accent-cyan transition-colors py-1.5 rounded-lg border border-border hover:border-accent-cyan/30"
-          >
+        {safeIdentifier && (
+          <Link href={publicSiteHref} target="_blank" className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-accent-cyan transition-colors py-1.5 rounded-lg border border-border hover:border-accent-cyan/30">
             <Eye className="w-3.5 h-3.5" /> View Public Site
           </Link>
         )}
-        {identifier && (
-          <Link
-            href={`/${identifier}/gatekeeper`}
-            className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-accent-green transition-colors py-1.5 rounded-lg border border-border hover:border-accent-green/30"
-          >
+        {safeIdentifier && (
+          <Link href={studioHref} className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-accent-green transition-colors py-1.5 rounded-lg border border-border hover:border-accent-green/30">
             <Pencil className="w-3.5 h-3.5" /> Open Studio
           </Link>
         )}
