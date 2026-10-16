@@ -58,16 +58,27 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'Strat-Clone Engine API', timestamp: new Date().toISOString() });
 });
 
-// Mount authentication routes on both /api/auth and /auth so external requests reaching /auth/login are handled
+// Mount routes on both /api/ prefix and root prefix to prevent any frontend routing mismatches
 app.use('/api/auth', authRoutes);
 app.use('/auth', authRoutes);
 
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/dashboard', dashboardRoutes);
+
 app.use('/api/datasets', datasetRoutes);
+app.use('/datasets', datasetRoutes);
+
 app.use('/api/models', modelRoutes);
+app.use('/models', modelRoutes);
+
 app.use('/api/broker', brokerRoutes);
+app.use('/broker', brokerRoutes);
+
 app.use('/api/bots', botRoutes);
+app.use('/bots', botRoutes);
+
 app.use('/api/gatekeeper', gatekeeperRoutes);
+app.use('/gatekeeper', gatekeeperRoutes);
 
 // 404 Fallback route handler so unhandled endpoints return clear JSON instead of HTML/empty responses
 app.use((req, res) => {
