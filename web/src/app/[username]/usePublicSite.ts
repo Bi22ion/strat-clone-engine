@@ -29,9 +29,18 @@ export function usePublicSite(username: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const identifier = String(username || '').trim();
+    if (!identifier) {
+      setProfile(null);
+      setBlocks([]);
+      setError('Site not found');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    gatekeeper.getSite(username)
+    gatekeeper.getSite(identifier)
       .then((data) => {
         setProfile(data.profile);
         setBlocks(data.blocks || []);
