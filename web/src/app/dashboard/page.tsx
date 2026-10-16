@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Brain, Database, Link2, Bot, Activity, ArrowRight, TrendingUp, TrendingDown, Target, Crosshair } from 'lucide-react';
+import { Brain, Database, Link2, Bot, Activity, ArrowRight, TrendingUp, TrendingDown, Target, Crosshair, Lock, ShieldCheck } from 'lucide-react';
 import { dashboard, DashboardSummary, LiveStock, ProjectedTrade } from '@/lib/api';
 import GiftWebsitePreview from './GiftWebsitePreview';
 
@@ -37,9 +37,25 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-1">Trading Dashboard</h1>
-        <p className="text-zinc-400">Your AI-powered trading command center</p>
+      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Trading Dashboard</h1>
+          <p className="text-zinc-400">Your AI-powered trading command center & gift website portal</p>
+        </div>
+
+        {/* Demo Practice Mode Indicator */}
+        <div className="bg-zinc-900/80 border border-border rounded-xl p-3 flex items-center gap-3 backdrop-blur-sm shadow-lg">
+          <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="text-xs">
+            <p className="font-semibold text-zinc-200 flex items-center gap-1.5">
+              <span>Demo Account Mode</span>
+              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-mono">Free Practice</span>
+            </p>
+            <p className="text-zinc-400">Test strategies risk-free. <span className="text-amber-400 font-medium">Real money execution requires subscription.</span></p>
+          </div>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -58,21 +74,29 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Broker Status Bar */}
+      {/* Broker Status Bar with Real Money Account Link / Upgrade */}
       {summary && (
-        <div className="card mb-8 flex items-center justify-between">
+        <div className="card mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link2 className="w-5 h-5 text-accent-cyan" />
             <div>
-              <p className="text-sm font-medium">Broker Status</p>
-              <p className="text-xs text-zinc-500">Alpaca · {summary.broker.is_paper_trading ? 'Paper Trading' : 'Live'}</p>
+              <p className="text-sm font-medium">Broker Account Status</p>
+              <p className="text-xs text-zinc-500">Alpaca · {summary.broker.is_paper_trading ? 'Demo / Paper Trading Simulator (Active)' : 'Live Real Money'}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${summary.broker.connection_status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-            <span className={`text-sm font-medium capitalize ${summary.broker.connection_status === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
-              {summary.broker.connection_status}
-            </span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${summary.broker.connection_status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+              <span className={`text-sm font-medium capitalize ${summary.broker.connection_status === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {summary.broker.connection_status}
+              </span>
+            </div>
+            <button 
+              onClick={() => alert("Linking your real money account and unlocking your permanent gift website requires an active subscription fee.")}
+              className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-md"
+            >
+              <Lock className="w-3.5 h-3.5" /> Link Real Money Account
+            </button>
           </div>
         </div>
       )}
@@ -82,7 +106,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 card">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Activity className="w-5 h-5 text-accent-cyan" />
-            Live Stocks
+            Live Stocks & Market Simulation
           </h3>
           {liveStocks.length === 0 ? (
             <p className="text-zinc-500 text-center py-8 text-sm">Loading live tickers...</p>
@@ -97,12 +121,12 @@ export default function DashboardPage() {
                       {stock.isUp ? '+' : ''}{stock.changePct}%
                     </span>
                   </div>
-                  <p className="text-xl font-bold mono-data">${stock.price.toLocaleString()}</p>
+                  <p className="text-xl font-bold mono-data">\${stock.price.toLocaleString()}</p>
                   {stock.tradeCount > 0 && (
                     <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
                       <span>{stock.tradeCount} trades</span>
                       <span className={stock.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                        P&L: ${stock.totalPnl.toFixed(2)}
+                        P&L: \${stock.totalPnl.toFixed(2)}
                       </span>
                     </div>
                   )}
@@ -116,7 +140,7 @@ export default function DashboardPage() {
             <div className="mt-6">
               <h4 className="text-sm font-medium text-zinc-400 mb-3 flex items-center gap-2">
                 <Crosshair className="w-4 h-4 text-amber-400" />
-                Projected Trades / Paper Signals
+                Projected Trades / Paper Signals (Demo Practice)
               </h4>
               <div className="space-y-2">
                 {projectedTrades.map((trade, i) => (
@@ -133,15 +157,15 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-4 gap-2 text-xs">
                       <div>
                         <p className="text-zinc-500">Entry</p>
-                        <p className="mono-data text-zinc-300">${trade.entryPrice.toFixed(2)}</p>
+                        <p className="mono-data text-zinc-300">\${trade.entryPrice.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-zinc-500">Target</p>
-                        <p className="mono-data text-emerald-400">${trade.takeProfit.toFixed(2)}</p>
+                        <p className="mono-data text-emerald-400">\${trade.takeProfit.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-zinc-500">Stop</p>
-                        <p className="mono-data text-red-400">${trade.stopLoss.toFixed(2)}</p>
+                        <p className="mono-data text-red-400">\${trade.stopLoss.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-zinc-500">Confidence</p>
@@ -155,7 +179,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Gift Website Preview */}
+        {/* Gift Website Preview & Launch Button Widget */}
         <div>
           <GiftWebsitePreview />
         </div>
