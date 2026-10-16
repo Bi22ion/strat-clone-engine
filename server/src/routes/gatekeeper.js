@@ -54,19 +54,8 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 });
 
- // Alias to support root-level /profile requests
-router.get('/', authMiddleware, async (req, res) => {
-  req.url = '/profile';
-  router.handle(req, res);
-});
-
-router.put('/', authMiddleware, async (req, res) => {
-  req.url = '/profile';
-  router.handle(req, res);
-});
-
-// GET /api/gatekeeper/profile
-router.get('/profile', authMiddleware, async (req, res) => {
+ // GET /api/gatekeeper/profile (supports both /profile and /gatekeeper/profile)
+router.get(['/profile', '/gatekeeper/profile', '/'], authMiddleware, async (req, res) => {
   try {
     let data = await getProfileWithBlocks(req.user.id);
     if (!data) {
@@ -87,8 +76,8 @@ router.get('/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/gatekeeper/profile
-router.put('/profile', authMiddleware, async (req, res) => {
+// PUT /api/gatekeeper/profile (supports both /profile and /gatekeeper/profile)
+router.put(['/profile', '/gatekeeper/profile', '/'], authMiddleware, async (req, res) => {
   try {
     const {
       display_name, tagline, bio, avatar_url, cover_url,
