@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { ensureGatekeeperSchema, seedDefaultProfile, getProfileWithBlocks } from '../services/gatekeeperService.js';
+import { ensureGatekeeperSchema, seedDefaultProfile, getProfileWithBlocks, getSiteByIdentifier } from '../services/gatekeeperService.js';
 
 const router = Router();
 
@@ -403,22 +403,21 @@ router.post('/messages/:id/reply', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/gatekeeper/site/:slug/message — public, no auth
-router.post('/site/:slug/message', async (req, res) => {
+// POST /api/gatekeeper/site/:identifier/message — public, no auth
+router.post('/site/:identifier/message', async (req, res) => {
   try {
     const { sender_name, sender_email, message, page } = req.body;
     if (!sender_name || !sender_email || !message) {
       return res.status(400).json({ error: 'Name, email, and message are required' });
     }
 
-    const { data: profile } = await supabase
-      .from('gatekeeper_profiles')
-      .select('id')
-      .eq('slug', req.params.slug)
-      .eq('is_published', true)
-      .maybeSingle();
+    const { identifier } = req.params;
 
-    if (!profile) return res.status(404).json({ error: 'Site not found' });
+    const site = await getSiteByIdentifier(identifier);
+    const profile = site?.profile;
+
+    // Only allow messages to published sites
+    if (!profile || !profile.is_published) return res.status(404).json({ error: 'Site not found' });
 
     await supabase.from('gatekeeper_messages').insert({
       profile_id: profile.id,
@@ -468,24 +467,16 @@ router.post('/media', authMiddleware, upload.single('file'), async (req, res) =>
   }
 });
 
-// GET /api/gatekeeper/site/:slug — public profile (no auth, works for draft + published)
-router.get('/site/:slug', async (req, res) => {
+// GET /api/gatekeeper/site/:identifier — public profile (no auth, works for draft + published)
+router.get('/site/:identifier', async (req, res) => {
   try {
-    const { data: profile } = await supabase
-      .from('gatekeeper_profiles')
-      .select('*')
-      .eq('slug', req.params.slug)
-      .maybeSingle();
+    const { identifier } = req.params;
+
+    const site = await getSiteByIdentifier(identifier);
+    const profile = site?.profile;
+    const blocks = site?.blocks || [];
 
     if (!profile) return res.status(404).json({ error: 'Site not found' });
-
-    const { data: blocks } = await supabase
-      .from('gatekeeper_blocks')
-      .select('*')
-      .eq('profile_id', profile.id)
-      .eq('is_visible', true)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true });
 
     res.json({
       profile: {
