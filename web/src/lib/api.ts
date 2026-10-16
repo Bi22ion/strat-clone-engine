@@ -1,5 +1,10 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
-const API_URL = configuredApiUrl ? configuredApiUrl.replace(/\/$/, '') : '/api';
+const normalizedConfiguredApiUrl = configuredApiUrl?.replace(/\/$/, '');
+const API_URL = normalizedConfiguredApiUrl
+  ? normalizedConfiguredApiUrl.endsWith('/api')
+    ? normalizedConfiguredApiUrl
+    : `${normalizedConfiguredApiUrl}/api`
+  : '/api';
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
