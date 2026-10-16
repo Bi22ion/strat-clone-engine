@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Brain, Database, Link2, Bot, Activity, ArrowRight, TrendingUp, TrendingDown, Target, Crosshair, Lock, ShieldCheck } from 'lucide-react';
-import { dashboard, DashboardSummary, LiveStock, ProjectedTrade } from '@/lib/api';
+import { dashboard, DashboardSummary, LiveStock, ProjectedTrade, gatekeeper, GatekeeperSubscription } from '@/lib/api';
 import GiftWebsitePreview from './GiftWebsitePreview';
 
 export default function DashboardPage() {
@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const [liveStocks, setLiveStocks] = useState<LiveStock[]>([]);
   const [projectedTrades, setProjectedTrades] = useState<ProjectedTrade[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subscription, setSubscription] = useState<GatekeeperSubscription | null>(null);
 
   useEffect(() => {
     dashboard.summary().then(setSummary).catch(() => {}).finally(() => setLoading(false));
@@ -18,6 +19,12 @@ export default function DashboardPage() {
       setLiveStocks(data.liveStocks || []);
       setProjectedTrades(data.projectedTrades || []);
     }).catch(() => {});
+
+    // fetch subscription status (non-blocking)
+    gatekeeper.getSubscription()
+      .then((data) => setSubscription(data.subscription || null))
+      .catch(() => setSubscription(null));
+
     const interval = setInterval(() => {
       dashboard.summary().then(setSummary).catch(() => {});
       dashboard.liveStocks().then((data) => {
@@ -34,6 +41,25 @@ export default function DashboardPage() {
     { label: 'Active Bots', value: summary?.activeBots ?? 0, icon: Bot, color: 'text-accent-green', link: '/dashboard/bots' },
     { label: 'Executions', value: summary?.executionsToday ?? 0, icon: Activity, color: 'text-amber-400', link: '/dashboard/bots' },
   ];
+
+  const handleLinkRealAccount = async () => {
+    try {
+      const res = await gatekeeper.getSubscription();
+      const sub = res.subscription;
+      if (sub && sub.status === 'active') {
+        // user has an active subscription — proceed to the broker linking flow
+        // prefer internal route if available
+        window.location.href = '/dashboard/broker/connect';
+      } else {
+        // gate live linking behind billing/subscription
+        // redirect to billing or subscription page where user can upgrade
+        window.location.href = '/billing';
+      }
+    } catch (err) {
+      // on error, send user to billing as the safe fallback
+      window.location.href = '/billing';
+    }
+  };
 
   return (
     <div>
@@ -92,7 +118,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <button 
-              onClick={() => alert("Linking your real money account and unlocking your permanent gift website requires an active subscription fee.")}
+              onClick={handleLinkRealAccount}
               className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-md"
             >
               <Lock className="w-3.5 h-3.5" /> Link Real Money Account
@@ -121,12 +147,12 @@ export default function DashboardPage() {
                       {stock.isUp ? '+' : ''}{stock.changePct}%
                     </span>
                   </div>
-                  <p className="text-xl font-bold mono-data">\${stock.price.toLocaleString()}</p>
+                  <p className="text-xl font-bold mono-data">${stock.price.toLocaleString()}</p>
                   {stock.tradeCount > 0 && (
                     <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
                       <span>{stock.tradeCount} trades</span>
                       <span className={stock.totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                        P&L: \${stock.totalPnl.toFixed(2)}
+                        P&L: ${stock.totalPnl.toFixed(2)}
                       </span>
                     </div>
                   )}
@@ -157,15 +183,15 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-4 gap-2 text-xs">
                       <div>
                         <p className="text-zinc-500">Entry</p>
-                        <p className="mono-data text-zinc-300">\${trade.entryPrice.toFixed(2)}</p>
+                        <p className="mono-data text-zinc-300">${trade.entryPrice.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-zinc-500">Target</p>
-                        <p className="mono-data text-emerald-400">\${trade.takeProfit.toFixed(2)}</p>
+                        <p className="mono-data text-emerald-400">${trade.takeProfit.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-zinc-500">Stop</p>
-                        <p className="mono-data text-red-400">\${trade.stopLoss.toFixed(2)}</p>
+                        <p className="mono-data text-red-400">${trade.stopLoss.toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-zinc-500">Confidence</p>
