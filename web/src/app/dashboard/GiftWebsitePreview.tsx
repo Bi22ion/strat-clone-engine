@@ -22,11 +22,17 @@ export default function GiftWebsitePreview() {
 
   useEffect(() => {
     gatekeeper.getProfile()
-      .then((data) => {
-        setProfile(data.profile);
-        setBlocks(data.blocks || []);
+      .then((data: any) => {
+        // Handles both nested structures and direct flat responses securely
+        const p = data?.profile || data;
+        const b = data?.blocks || [];
+        setProfile(p);
+        setBlocks(b);
       })
-      .catch(() => setError(true))
+      .catch((err) => {
+        console.error('Failed to load gift website preview:', err);
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
