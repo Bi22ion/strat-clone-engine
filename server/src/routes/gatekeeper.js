@@ -54,7 +54,7 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 });
 
-// Alias to support root-level /profile requests
+ // Alias to support root-level /profile requests
 router.get('/', authMiddleware, async (req, res) => {
   req.url = '/profile';
   router.handle(req, res);
