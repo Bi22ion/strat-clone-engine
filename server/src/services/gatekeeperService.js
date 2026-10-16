@@ -128,3 +128,56 @@ export async function getProfileWithBlocks(userId) {
 
   return { profile, blocks: blocks || [] };
 }
+
+// New helper: resolve a public site by slug or owner_id (with lazy provisioning)
+export async function getSiteByIdentifier(identifier) {
+  if (!identifier) return null;
+
+  // 1) Try by slug
+  let { data: profile } = await supabase
+    .from('gatekeeper_profiles')
+    .select('*')
+    .eq('slug', identifier)
+    .maybeSingle();
+
+  // 2) If not found, try by owner_id
+  if (!profile) {
+    const { data: byOwner } = await supabase
+      .from('gatekeeper_profiles')
+      .select('*')
+      .eq('owner_id', identifier)
+      .maybeSingle();
+    profile = byOwner;
+  }
+
+  // 3) If still not found, check if identifier is an existing user id — if so, lazily create profile
+  if (!profile) {
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, email, full_name')
+      .eq('id', identifier)
+      .maybeSingle();
+
+    if (user) {
+      // create default profile for this user
+      const seeded = await seedDefaultProfile(user.id, user.full_name, user.email);
+      profile = seeded;
+    }
+  }
+
+  if (!profile) return null;
+
+  // load visible blocks
+  const { data: blocks } = await supabase
+    .from('gatekeeper_blocks')
+    .select('*')
+    .eq('profile_id', profile.id)
+    .eq('is_visible', true)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  return {
+    profile,
+    blocks: (blocks || []).map((b) => ({ ...b, layout: b.layout ? (typeof b.layout === 'string' ? JSON.parse(b.layout) : b.layout) : {} })),
+  };
+}
