@@ -79,7 +79,11 @@ export async function runOneEvaluation({ bot, model, broker, repository, now = n
     await repository.logDecision({ bot, decision, risk });
     if (!risk.approved) continue;
     const clientOrderId = `strat-${bot.id}-${symbol}-${quote.timestamp}`;
+    if (repository.findOrderByClientOrderId && await repository.findOrderByClientOrderId(clientOrderId)) {
+      return { action: 'NO_TRADE', reason: 'duplicate_order_prevented', clientOrderId };
+    }
     const result = normalizeOrderResult(await broker.placeOrder({ symbol, qty: decision.quantity, side: 'buy', clientOrderId }));
+    if (bot.status !== 'active' || bot.kill_switch) return { action: 'NO_TRADE', reason: 'bot_stopped_before_persistence' };
     await repository.persistOrder({ bot, decision, result, clientOrderId });
     if (!result.accepted) return result;
     const fill = reconcileFill(result, result.raw);
@@ -89,16 +93,31 @@ export async function runOneEvaluation({ bot, model, broker, repository, now = n
   return { action: 'NO_TRADE', reason: 'no_eligible_signal' };
 }
 
-export async function emergencyStop({ bots, broker, repository }) {
-  const active = bots.filter((bot) => bot.status === 'active');
-  await repository.stopBots(active.map((bot) => bot.id));
-  const canceled = await broker.cancelAllOrders();
-  const closed = await broker.closeAllPositions();
-  await repository.logEmergency({ botIds: active.map((bot) => bot.id), canceled, closed });
-  return { stopped: active.length, canceled, closed };
+export async function emergencyStop({ bots, broker, repository, closePositions = true }) {
+  const active = bots.filter((bot) => bot.status === 'active' && !bot.kill_switch);
+  const botIds = active.map((bot) => bot.id);
+  await repository.stopBots(botIds);
+  let canceled = null;
+  let closed = null;
+  const failures = [];
+  try { canceled = await broker.cancelAllOrders(); } catch (error) { failures.push({ action: 'cancel_orders', error: error.message }); }
+  if (closePositions) {
+    try { closed = await broker.closeAllPositions(); } catch (error) { failures.push({ action: 'close_positions', error: error.message }); }
+  }
+  const result = { botIds, canceled, closed, failures, ok: failures.length === 0 };
+  await repository.logEmergency(result);
+  return { stopped: botIds.length, ...result };
 }
 
 export function createInMemoryRepository() {
-  return { decisions: [], orders: [], fills: [], emergency: [], async logDecision(v) { this.decisions.push(v); }, async persistOrder(v) { this.orders.push(v); }, async persistFill(v) { this.fills.push(v); }, async stopBots(ids) { this.stopped = ids; }, async logEmergency(v) { this.emergency.push(v); } };
+  return {
+    decisions: [], orders: [], fills: [], emergency: [],
+    async logDecision(v) { this.decisions.push(v); },
+    async persistOrder(v) { this.orders.push(v); },
+    async persistFill(v) { this.fills.push(v); },
+    async findOrderByClientOrderId(id) { return this.orders.find((order) => order.clientOrderId === id) || null; },
+    async stopBots(ids) { this.stopped = ids; },
+    async logEmergency(v) { this.emergency.push(v); },
+  };
 }
 export const __private__ = { evaluateSignal, approveRisk, normalizeOrderResult, reconcileFill };

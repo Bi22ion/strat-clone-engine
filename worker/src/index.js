@@ -27,10 +27,19 @@ const repository = {
   },
   async persistFill({ bot, result, fill }) {
     if (!result.databaseOrderId || fill.state === 'pending') return;
-    await supabase.from('trading_fills').insert({ user_id: bot.user_id, order_id: result.databaseOrderId, broker_fill_id: result.brokerOrderId, quantity: fill.filledQuantity, price: fill.averagePrice, status: fill.state });
+    const { error } = await supabase.from('trading_fills').insert({ user_id: bot.user_id, order_id: result.databaseOrderId, broker_fill_id: result.brokerOrderId, quantity: fill.filledQuantity, price: fill.averagePrice, status: fill.state });
+    if (error) throw error;
+  },
+  async findOrderByClientOrderId(clientOrderId) {
+    const { data, error } = await supabase.from('trading_orders').select('id, client_order_id').eq('client_order_id', clientOrderId).maybeSingle();
+    if (error) throw error;
+    return data;
   },
   async stopBots(ids) { if (ids.length) await supabase.from('trading_bots').update({ status: 'stopped_emergency', kill_switch: true }).in('id', ids); },
-  async logEmergency(payload) { await supabase.from('execution_logs').insert({ user_id: payload.userId || null, action: 'EMERGENCY_KILL', status: 'executed', message: 'Emergency stop completed', broker_response: payload }); },
+  async logEmergency(payload) {
+    const { error } = await supabase.from('execution_logs').insert({ user_id: payload.userId || null, action: 'EMERGENCY_KILL', status: payload.ok ? 'executed' : 'partial_failure', message: payload.ok ? 'Emergency stop completed' : 'Emergency stop completed with broker failures', broker_response: payload });
+    if (error) throw error;
+  },
 };
 
 async function processActiveBots() {
