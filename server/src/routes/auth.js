@@ -77,6 +77,14 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Ensure gatekeeper profile exists on login (fixes 404 for existing/legacy accounts)
+    try {
+      await ensureGatekeeperSchema();
+      await seedDefaultProfile(user.id, user.full_name, user.email);
+    } catch (profileErr) {
+      console.error('Auto-provision profile on login error:', profileErr);
+    }
+
     const token = signToken({ id: user.id, email: user.email });
     res.json({
       user: { id: user.id, email: user.email, full_name: user.full_name, created_at: user.created_at },
