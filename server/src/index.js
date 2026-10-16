@@ -58,7 +58,10 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'Strat-Clone Engine API', timestamp: new Date().toISOString() });
 });
 
+// Mount authentication routes on both /api/auth and /auth so external requests reaching /auth/login are handled
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
+
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/datasets', datasetRoutes);
 app.use('/api/models', modelRoutes);
