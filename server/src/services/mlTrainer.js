@@ -1,4 +1,5 @@
 import { supabase } from '../db.js';
+import { evaluateOnUnseenData } from './modelMetrics.js';
 import { parseTradesFromCSV } from './csvParser.js';
 
 export async function trainModelNode(datasetId, userId, modelName) {
@@ -71,7 +72,8 @@ export async function trainModelNode(datasetId, userId, modelName) {
   if (modelError) throw modelError;
 
   try {
-    const metrics = extractBehavioralPatterns(trades);
+    const split = Math.max(1, Math.floor(trades.length * 0.7));
+    const metrics = { ...extractBehavioralPatterns(trades.slice(0, split)), ...evaluateOnUnseenData(trades), ruleset: { ...extractBehavioralPatterns(trades.slice(0, split)).ruleset, validation: evaluateOnUnseenData(trades).metrics } };
 
     const { error: updateError } = await supabase
       .from('strategy_models')

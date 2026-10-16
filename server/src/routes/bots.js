@@ -136,42 +136,33 @@ router.post('/kill-switch', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: activeBots } = await supabase
+    const { data: activeBots, error: stopError } = await supabase
       .from('trading_bots')
-      .update({ status: 'stopped_emergency' })
+      .update({ status: 'stopped_emergency', kill_switch: true })
       .eq('user_id', userId)
       .eq('status', 'active')
-      .select('*');
+      .select('id, broker_credential_id');
+    if (stopError) throw stopError;
 
-    const { data: credentials } = await supabase
-      .from('broker_credentials')
-      .select('*')
-      .eq('user_id', userId)
-      .limit(1)
-      .maybeSingle();
+    const credentialIds = [...new Set((activeBots || []).map((bot) => bot.broker_credential_id).filter(Boolean))];
+    const { data: credentials, error: credentialError } = credentialIds.length
+      ? await supabase.from('broker_credentials').select('*').in('id', credentialIds).eq('user_id', userId).eq('is_paper_trading', true)
+      : { data: [], error: null };
+    if (credentialError) throw credentialError;
 
-    let closeResult = null;
-    if (credentials) {
+    const brokerResults = [];
+    for (const credentialsForBot of credentials || []) {
       try {
-        const broker = AlpacaBroker.fromCredentials(credentials);
-        closeResult = await broker.closeAllPositions();
+        const broker = AlpacaBroker.fromCredentials(credentialsForBot, { requirePaper: true });
+        const [canceled, closed] = await Promise.all([broker.cancelAllOrders(), broker.closeAllPositions()]);
+        brokerResults.push({ credentialId: credentialsForBot.id, canceled, closed, ok: true });
       } catch (err) {
-        closeResult = { error: err.message };
+        brokerResults.push({ credentialId: credentialsForBot.id, ok: false, error: err.message });
       }
     }
-
-    await supabase.from('execution_logs').insert({
-      user_id: userId,
-      action: 'EMERGENCY_KILL',
-      status: 'executed',
-      message: 'Emergency kill switch activated - all bots stopped',
-    });
-
-    res.json({
-      success: true,
-      botsStopped: activeBots?.length || 0,
-      positionsClosed: closeResult,
-    });
+    const failed = brokerResults.some((result) => !result.ok);
+    await supabase.from('execution_logs').insert({ user_id: userId, action: 'EMERGENCY_KILL', status: failed ? 'partial_failure' : 'executed', message: failed ? 'Emergency stop applied but broker reconciliation failed' : 'Emergency stop applied; pending orders canceled and positions closed', broker_response: brokerResults });
+    res.status(failed ? 502 : 200).json({ success: !failed, botsStopped: activeBots?.length || 0, brokerResults });
   } catch (err) {
     console.error('Kill switch error:', err);
     res.status(500).json({ error: 'Emergency kill switch failed' });

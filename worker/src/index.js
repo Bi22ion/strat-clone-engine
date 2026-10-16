@@ -3,233 +3,61 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { AlpacaBroker } from '../../server/src/services/brokerService.js';
+import { runOneEvaluation, emergencyStop } from './tradingEngine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../../.env') });
-
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseKey) throw new Error('Worker requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const POLL_INTERVAL_MS = Number(process.env.WORKER_POLL_INTERVAL || 30000);
+const MAX_QUOTE_AGE_MS = Number(process.env.MAX_QUOTE_AGE_MS || 120000);
+let cycleRunning = false;
+let stopping = false;
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
-
-const POLL_INTERVAL_MS = parseInt(process.env.WORKER_POLL_INTERVAL) || 30000;
-
-async function logExecution({ userId, botId, modelId, action, symbol, quantity, price, status, message, brokerResponse }) {
-  await supabase.from('execution_logs').insert({
-    user_id: userId,
-    bot_id: botId,
-    model_id: modelId,
-    action,
-    symbol,
-    quantity,
-    price,
-    status,
-    message,
-    broker_response: brokerResponse ? JSON.stringify(brokerResponse) : null,
-  });
-}
-
-async function resetDailyPnLIfNeeded(bot) {
-  const today = new Date().toISOString().split('T')[0];
-  if (bot.risk_reset_at !== today) {
-    await supabase
-      .from('trading_bots')
-      .update({ current_daily_pnl: 0, risk_reset_at: today })
-      .eq('id', bot.id);
-    bot.current_daily_pnl = 0;
-    bot.risk_reset_at = today;
-  }
-}
-
-async function checkRiskGuardrail(bot) {
-  await resetDailyPnLIfNeeded(bot);
-  const dailyLoss = Math.abs(Math.min(parseFloat(bot.current_daily_pnl), 0));
-  const maxLoss = parseFloat(bot.max_daily_loss);
-
-  if (dailyLoss >= maxLoss) {
-    await supabase
-      .from('trading_bots')
-      .update({ status: 'stopped_by_risk' })
-      .eq('id', bot.id);
-
-    let closeResult = null;
-    if (bot.broker_credential_id) {
-      const { data: cred } = await supabase
-        .from('broker_credentials')
-        .select('*')
-        .eq('id', bot.broker_credential_id)
-        .maybeSingle();
-      if (cred) {
-        try {
-          const broker = AlpacaBroker.fromCredentials(cred);
-          closeResult = await broker.closeAllPositions();
-        } catch (err) {
-          closeResult = { error: err.message };
-        }
-      }
-    }
-
-    await logExecution({
-      userId: bot.user_id,
-      botId: bot.id,
-      modelId: bot.model_id,
-      action: 'RISK_HALT',
-      status: 'stopped_by_risk',
-      message: `Daily loss limit ($${maxLoss}) exceeded. Bot halted and positions closed.`,
-      brokerResponse: closeResult,
-    });
-
-    return true;
-  }
-  return false;
-}
-
-async function evaluateAndExecute(bot) {
-  const { data: model } = await supabase
-    .from('strategy_models')
-    .select('*')
-    .eq('id', bot.model_id)
-    .maybeSingle();
-
-  if (!model || model.status !== 'ready') return;
-
-  const ruleset = typeof model.ruleset === 'string' ? JSON.parse(model.ruleset) : model.ruleset;
-  if (!ruleset) return;
-
-  const { data: cred } = await supabase
-    .from('broker_credentials')
-    .select('*')
-    .eq('id', bot.broker_credential_id)
-    .maybeSingle();
-
-  if (!cred) {
-    await logExecution({
-      userId: bot.user_id,
-      botId: bot.id,
-      modelId: bot.model_id,
-      action: 'SKIP',
-      status: 'failed',
-      message: 'No broker credentials configured',
-    });
-    return;
-  }
-
-  const broker = AlpacaBroker.fromCredentials(cred);
-  const preferredSymbols = ruleset.entry_rules?.preferred_symbols || ['SPY'];
-
-  for (const symbol of preferredSymbols.slice(0, 2)) {
-    try {
-      const price = await broker.getLatestPrice(symbol);
-      if (!price) continue;
-
-      const priceRange = ruleset.entry_rules?.price_range;
-      if (priceRange && (price < priceRange.min || price > priceRange.max)) {
-        await logExecution({
-          userId: bot.user_id,
-          botId: bot.id,
-          modelId: bot.model_id,
-          action: 'EVALUATE',
-          symbol,
-          price,
-          status: 'skipped',
-          message: `Price ${price} outside learned range [${priceRange.min}-${priceRange.max}]`,
-        });
-        continue;
-      }
-
-      const confidence = ruleset.risk_management?.confidence_threshold || 0.5;
-      const winRate = (model.win_rate || 50) / 100;
-
-      if (winRate >= confidence) {
-        const qty = 1;
-        const side = ruleset.behavioral_signature?.dominant_side === 'long' ? 'buy' : 'buy';
-
-        const orderResult = await broker.placeOrder({ symbol, qty, side });
-
-        await logExecution({
-          userId: bot.user_id,
-          botId: bot.id,
-          modelId: bot.model_id,
-          action: side.toUpperCase(),
-          symbol,
-          quantity: qty,
-          price,
-          status: 'success',
-          message: `Order placed: ${side} ${qty} ${symbol} @ ~$${price.toFixed(2)}`,
-          brokerResponse: orderResult,
-        });
-
-        const estimatedPnl = side === 'buy' ? -price * qty * 0.001 : price * qty * 0.001;
-        await supabase
-          .from('trading_bots')
-          .update({ current_daily_pnl: (parseFloat(bot.current_daily_pnl) + estimatedPnl) })
-          .eq('id', bot.id);
-      }
-    } catch (err) {
-      await logExecution({
-        userId: bot.user_id,
-        botId: bot.id,
-        modelId: bot.model_id,
-        action: 'EXECUTE',
-        symbol,
-        status: 'failed',
-        message: err.message,
-      });
-    }
-  }
-}
+const repository = {
+  async logDecision({ bot, decision, risk }) {
+    await supabase.from('execution_logs').insert({ user_id: bot.user_id, bot_id: bot.id, model_id: bot.model_id, action: decision.action || 'NO_TRADE', symbol: decision.symbol, quantity: decision.quantity, price: decision.referencePrice, status: risk.approved ? 'approved' : 'rejected', message: risk.approved ? 'Risk approved decision' : `Risk rejected: ${risk.reason}`, broker_response: { data_timestamp: decision.dataTimestamp, reason: decision.reason } });
+  },
+  async persistOrder({ bot, decision, result, clientOrderId }) {
+    const { data, error } = await supabase.from('trading_orders').insert({ user_id: bot.user_id, bot_id: bot.id, client_order_id: clientOrderId, broker_order_id: result.brokerOrderId || null, symbol: decision.symbol, side: 'buy', quantity: decision.quantity, status: result.status || 'rejected', paper_trading: true }).select('id').single();
+    if (error) throw error;
+    result.databaseOrderId = data.id;
+  },
+  async persistFill({ bot, result, fill }) {
+    if (!result.databaseOrderId || fill.state === 'pending') return;
+    await supabase.from('trading_fills').insert({ user_id: bot.user_id, order_id: result.databaseOrderId, broker_fill_id: result.brokerOrderId, quantity: fill.filledQuantity, price: fill.averagePrice, status: fill.state });
+  },
+  async stopBots(ids) { if (ids.length) await supabase.from('trading_bots').update({ status: 'stopped_emergency', kill_switch: true }).in('id', ids); },
+  async logEmergency(payload) { await supabase.from('execution_logs').insert({ user_id: payload.userId || null, action: 'EMERGENCY_KILL', status: 'executed', message: 'Emergency stop completed', broker_response: payload }); },
+};
 
 async function processActiveBots() {
+  if (cycleRunning || stopping) return;
+  cycleRunning = true;
   try {
-    const { data: bots, error } = await supabase
-      .from('trading_bots')
-      .select('*, broker_credentials!inner(*)')
-      .eq('status', 'active');
-
-    if (error) {
-      // Fallback: fetch bots and credentials separately
-      const { data: botList } = await supabase
-        .from('trading_bots')
-        .select('*')
-        .eq('status', 'active');
-
-      if (botList && botList.length > 0) {
-        for (const bot of botList) {
-          const { data: cred } = await supabase
-            .from('broker_credentials')
-            .select('id')
-            .eq('user_id', bot.user_id)
-            .limit(1)
-            .maybeSingle();
-
-          const botWithCred = { ...bot, broker_credential_id: cred?.id || null };
-          const halted = await checkRiskGuardrail(botWithCred);
-          if (!halted) {
-            await evaluateAndExecute(botWithCred);
-          }
-        }
-      }
-      return;
-    }
-
-    for (const bot of (bots || [])) {
-      const halted = await checkRiskGuardrail(bot);
-      if (!halted) {
-        await evaluateAndExecute(bot);
+    const { data: bots, error } = await supabase.from('trading_bots').select('*').eq('status', 'active').eq('kill_switch', false);
+    if (error) throw error;
+    for (const bot of bots || []) {
+      const { data: model } = await supabase.from('strategy_models').select('*').eq('id', bot.model_id).eq('user_id', bot.user_id).maybeSingle();
+      const { data: cred } = await supabase.from('broker_credentials').select('*').eq('id', bot.broker_credential_id).eq('user_id', bot.user_id).eq('is_paper_trading', true).maybeSingle();
+      if (!model || !cred) continue;
+      try {
+        const broker = AlpacaBroker.fromCredentials(cred, { requirePaper: true });
+        await runOneEvaluation({ bot, model, broker: { ...broker, getLatestQuote: async (symbol) => ({ symbol, price: await broker.getLatestPrice(symbol), timestamp: new Date().toISOString() }) }, repository, now: new Date() });
+        await supabase.from('trading_bots').update({ last_heartbeat_at: new Date().toISOString(), last_evaluation_at: new Date().toISOString() }).eq('id', bot.id).eq('status', 'active');
+      } catch (err) {
+        await supabase.from('execution_logs').insert({ user_id: bot.user_id, bot_id: bot.id, action: 'WORKER_ERROR', status: 'failed', message: err.message });
       }
     }
-  } catch (err) {
-    console.error('Worker cycle error:', err);
-  }
+  } finally { cycleRunning = false; }
 }
 
-console.log(`Strat-Clone Execution Worker started (poll interval: ${POLL_INTERVAL_MS}ms)`);
+console.log(`Strat-Clone paper execution worker started (poll interval: ${POLL_INTERVAL_MS}ms)`);
 processActiveBots();
-setInterval(processActiveBots, POLL_INTERVAL_MS);
-
-process.on('SIGINT', () => {
-  console.log('Worker shutting down...');
-  process.exit(0);
-});
+const timer = setInterval(processActiveBots, POLL_INTERVAL_MS);
+async function shutdown(signal) { stopping = true; clearInterval(timer); console.log(`Worker shutting down after ${signal}`); process.exit(0); }
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+export { processActiveBots };

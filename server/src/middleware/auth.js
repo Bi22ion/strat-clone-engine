@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET must be set to a strong secret (at least 32 characters)');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export function signToken(payload) {

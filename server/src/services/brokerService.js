@@ -10,10 +10,13 @@ export class AlpacaBroker {
     this.baseUrl = isPaper ? PAPER_BASE : LIVE_BASE;
   }
 
-  static fromCredentials(credentials) {
+  static fromCredentials(credentials, { requirePaper = false } = {}) {
+    if (!credentials?.is_paper_trading && (requirePaper || process.env.ALLOW_LIVE_TRADING !== 'true')) {
+      throw new Error('Live trading is disabled by safety policy');
+    }
     const apiKey = decrypt(credentials.api_key_encrypted);
     const apiSecret = decrypt(credentials.api_secret_encrypted);
-    return new AlpacaBroker(apiKey, apiSecret, credentials.is_paper_trading);
+    return new AlpacaBroker(apiKey, apiSecret, credentials.is_paper_trading === true);
   }
 
   async request(method, path, body = null) {
@@ -63,6 +66,10 @@ export class AlpacaBroker {
       type,
       time_in_force,
     });
+  }
+
+  async cancelAllOrders() {
+    return this.request('DELETE', '/v2/orders');
   }
 
   async closeAllPositions() {
