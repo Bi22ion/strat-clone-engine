@@ -2,11 +2,15 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Play, TrendingUp, ChartBar as BarChart3, Video, Sparkles, CircleCheck as CheckCircle, Globe } from 'lucide-react';
+import { ArrowRight, Play, TrendingUp, ChartBar as BarChart3, Sparkles, CircleCheck as CheckCircle, Globe } from 'lucide-react';
 import { usePublicSite, parseTheme } from './usePublicSite';
 
-export default function HomePage({ params }: { params: Promise<{ username: string }> }) {
-  const { username } = use(params);
+export default function HomePage({ params }: { params?: Promise<{ username?: string }> | { username?: string } }) {
+  const resolvedParams = params && typeof (params as Promise<{ username?: string }>).then === 'function'
+    ? use(params as Promise<{ username?: string }>)
+    : (params || { username: '' });
+
+  const username = String(resolvedParams?.username || '');
   const { profile, blocks, loading, error } = usePublicSite(username);
   const { primary } = parseTheme(profile);
 
@@ -21,7 +25,7 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
           <Globe className="w-8 h-8 text-zinc-400" />
         </div>
         <h1 className="text-2xl font-bold text-zinc-900 mb-2">Site Not Found</h1>
-        <p className="text-zinc-500 max-w-md">The page <span className="font-mono text-zinc-700">/{username}</span> doesn&apos;t exist yet. If you&apos;re the owner, make sure your profile is set up from the dashboard.</p>
+        <p className="text-zinc-500 max-w-md">The page <span className="font-mono text-zinc-700">/{username}</span> doesn&apos;t exist yet. If you&apos;re the owner, make sure your profile is available in the dashboard.</p>
         <Link href="/dashboard/profile" className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 text-white font-medium hover:bg-zinc-800 transition-colors">
           Go to Dashboard
         </Link>
@@ -38,7 +42,6 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
 
   return (
     <div>
-      {/* HERO */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${primary}15, ${primary}05)` }} />
         <div className="relative max-w-6xl mx-auto px-6 py-20 md:py-28">
@@ -96,7 +99,6 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
         </div>
       </section>
 
-      {/* STATS */}
       <section className="max-w-6xl mx-auto px-6 py-16">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {[
@@ -110,13 +112,12 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
                 <stat.icon className="w-6 h-6" style={{ color: primary }} />
               </div>
               <p className="text-3xl font-bold text-zinc-900 mb-1">{stat.value}</p>
-               <p className="text-sm text-zinc-500">{stat.label}</p>
+              <p className="text-sm text-zinc-500">{stat.label}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* VIDEO / CLASS SHOWCASE */}
       {videoBlocks.length > 0 && (
         <section className="max-w-6xl mx-auto px-6 py-16">
           <div className="text-center mb-12">
@@ -128,11 +129,7 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
               <div key={block.id} className="bg-white rounded-2xl border border-zinc-200 overflow-hidden hover:shadow-xl transition-shadow group">
                 <div className="aspect-video bg-zinc-900 relative overflow-hidden">
                   {block.media_url ? (
-                    block.block_type === 'video' ? (
-                      <img src={block.media_url || undefined} alt={block.title || undefined} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    ) : (
-                      <img src={block.media_url || undefined} alt={block.title || undefined} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    )
+                    <img src={block.media_url || undefined} alt={block.title || undefined} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <img
@@ -158,7 +155,6 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
         </section>
       )}
 
-      {/* TEXT SECTIONS */}
       {textBlocks.length > 0 && (
         <section className="max-w-4xl mx-auto px-6 py-16 space-y-8">
           {textBlocks.map((block) => (
@@ -170,7 +166,6 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
         </section>
       )}
 
-      {/* IMAGE GALLERY */}
       {imageBlocks.length > 0 && (
         <section className="max-w-6xl mx-auto px-6 py-16">
           <h2 className="text-3xl font-bold text-zinc-900 mb-8 text-center">Gallery</h2>
@@ -192,7 +187,6 @@ export default function HomePage({ params }: { params: Promise<{ username: strin
         </section>
       )}
 
-      {/* CTA */}
       <section className="max-w-6xl mx-auto px-6 py-20">
         <div className="rounded-3xl p-12 text-center" style={{ background: `linear-gradient(135deg, ${primary}, ${primary}dd)` }}>
           <h2 className="text-3xl font-bold text-white mb-4">{ctaBlock?.title || 'Ready to Trade Alongside Me?'}</h2>
