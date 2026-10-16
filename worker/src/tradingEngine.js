@@ -78,7 +78,8 @@ export async function runOneEvaluation({ bot, model, broker, repository, now = n
     const risk = approveRisk({ decision, account, positions, bot, now });
     await repository.logDecision({ bot, decision, risk });
     if (!risk.approved) continue;
-    const clientOrderId = `strat-${bot.id}-${symbol}-${quote.timestamp}`;
+    // Keep the id stable across polling cycles so a repeated evaluation cannot submit the same intent twice.
+    const clientOrderId = `strat-${bot.id}-${symbol}-buy`;
     if (repository.findOrderByClientOrderId && await repository.findOrderByClientOrderId(clientOrderId)) {
       return { action: 'NO_TRADE', reason: 'duplicate_order_prevented', clientOrderId };
     }
