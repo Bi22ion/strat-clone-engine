@@ -54,6 +54,17 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 });
 
+// Alias to support root-level /profile requests
+router.get('/', authMiddleware, async (req, res) => {
+  req.url = '/profile';
+  router.handle(req, res);
+});
+
+router.put('/', authMiddleware, async (req, res) => {
+  req.url = '/profile';
+  router.handle(req, res);
+});
+
 // GET /api/gatekeeper/profile
 router.get('/profile', authMiddleware, async (req, res) => {
   try {
