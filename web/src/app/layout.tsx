@@ -7,8 +7,11 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains' });
 
 export const metadata: Metadata = {
-  title: 'Strat-Clone Engine',
-  description: 'Multi-tenant automated trading SaaS platform',
+  title: {
+    default: 'Strat-Clone Engine',
+    template: '%s | Strat-Clone Engine',
+  },
+  description: 'Train, test, and deploy transparent trading strategies with confidence.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

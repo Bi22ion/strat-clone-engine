@@ -45,7 +45,7 @@ function inferAssetClass(symbol) {
 }
 
 export async function parseAndIngestDataset(datasetId, userId, filePath, columnMapping, fileContent = null) {
-  const content = fileContent || (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null);
+  const content = fileContent ?? (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null);
   if (!content) {
     throw new Error('Dataset file not found. Please re-upload the CSV file.');
   }

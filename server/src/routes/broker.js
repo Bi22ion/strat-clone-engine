@@ -15,14 +15,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
-    // If credentials exist and are active but status is still 'disconnected' (never tested),
-    // treat as 'connected' since they were saved successfully
-    const creds = (data || []).map((c) => ({
-      ...c,
-      connection_status: c.is_active && c.connection_status === 'disconnected' ? 'connected' : c.connection_status,
-    }));
-
-    res.json({ credentials: creds });
+    res.json({ credentials: data || [] });
   } catch (err) {
     res.json({ credentials: [] });
   }
