@@ -191,7 +191,7 @@ function PublicFooter({
           </div>
         </div>
         <div className="border-t border-zinc-800 pt-6 text-center text-xs text-zinc-500">
-          &copy; {new Date().getFullYear()} {profile.display_name || username}. All rights reserved.
+          &copy; 2026 {profile.display_name || username}. All rights reserved.
         </div>
       </div>
     </footer>
