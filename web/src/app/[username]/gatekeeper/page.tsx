@@ -466,33 +466,33 @@ function SettingsPanel({
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm text-zinc-400 mb-1.5 block">Display Name</label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.display_name}
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.display_name ?? ''}
               onChange={(e) => onProfileChange({ ...profile, display_name: e.target.value })}
               onBlur={(e) => saveProfileField({ display_name: e.target.value })} />
           </div>
           <div>
             <label className="text-sm text-zinc-400 mb-1.5 block">URL Slug</label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.slug}
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.slug ?? ''}
               onChange={(e) => onProfileChange({ ...profile, slug: e.target.value })}
               onBlur={(e) => saveProfileField({ slug: e.target.value })} />
           </div>
         </div>
         <div>
           <label className="text-sm text-zinc-400 mb-1.5 block">Tagline</label>
-          <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.tagline || ''}
+          <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.tagline ?? ''}
             onChange={(e) => onProfileChange({ ...profile, tagline: e.target.value })}
             onBlur={(e) => saveProfileField({ tagline: e.target.value })} placeholder="Sharing my edge with the world" />
         </div>
         <div>
           <label className="text-sm text-zinc-400 mb-1.5 block">Bio</label>
-          <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50 min-h-24" defaultValue={profile.bio || ''}
+          <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50 min-h-24" defaultValue={profile.bio ?? ''}
             onChange={(e) => onProfileChange({ ...profile, bio: e.target.value })}
             onBlur={(e) => saveProfileField({ bio: e.target.value })} placeholder="Tell visitors about your trading journey…" />
         </div>
         <div>
           <label className="text-sm text-zinc-400 mb-1.5 block">Cover Image</label>
           <div className="flex gap-3">
-            <input className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.cover_url || ''}
+            <input className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.cover_url ?? ''}
               onChange={(e) => onProfileChange({ ...profile, cover_url: e.target.value })}
               onBlur={(e) => saveProfileField({ cover_url: e.target.value })} placeholder="https://…" />
             <MediaUploadZone onUpload={onCoverUpload} label="Upload" className="w-28" />
@@ -500,7 +500,7 @@ function SettingsPanel({
         </div>
         <div>
           <label className="text-sm text-zinc-400 mb-1.5 block">Avatar URL</label>
-          <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.avatar_url || ''}
+          <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.avatar_url ?? ''}
             onChange={(e) => onProfileChange({ ...profile, avatar_url: e.target.value })}
             onBlur={(e) => saveProfileField({ avatar_url: e.target.value })} placeholder="https://…" />
         </div>
@@ -567,18 +567,18 @@ function BlocksPanel({
               <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
                 <div>
                   <label className="text-sm text-zinc-400 mb-1 block">Title</label>
-                  <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.title}
+                  <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.title ?? ''}
                     onChange={(e) => onUpdate(block.id, { title: e.target.value })} />
                 </div>
                 <div>
                   <label className="text-sm text-zinc-400 mb-1 block">Content</label>
-                  <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm min-h-16 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.content}
+                  <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm min-h-16 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.content ?? ''}
                     onChange={(e) => onUpdate(block.id, { content: e.target.value })} />
                 </div>
                 {(block.block_type === 'image' || block.block_type === 'video' || block.block_type === 'trade_class') && (
                   <div>
                     <label className="text-sm text-zinc-400 mb-1 block">Media</label>
-                    <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.media_url || ''}
+                    <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.media_url ?? ''}
                       onChange={(e) => onUpdate(block.id, { media_url: e.target.value })} placeholder="https://… (image or video URL)" />
                     <MediaUploadZone onUpload={(file) => onMediaUpload(file, block.id)} label="Upload media for this block" />
                   </div>
