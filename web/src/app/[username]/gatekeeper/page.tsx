@@ -3,7 +3,12 @@
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, Plus, Trash2, Eye, EyeOff, Loader as Loader2, GripVertical, Sparkles, Palette, LayoutGrid, Video, Type, ChartBar as BarChart3, Megaphone, CreditCard, Check, ExternalLink, LogOut, Clock, Ban, Mail, Upload, Image as ImageIcon, X, MessageSquare, Inbox } from 'lucide-react';
+import {
+  Globe, Plus, Trash2, Eye, EyeOff, Loader as Loader2, GripVertical, Sparkles,
+  Palette, LayoutGrid, Video, Type, ChartBar as BarChart3, Megaphone,
+  CreditCard, Check, ExternalLink, LogOut, Inbox, Upload, Image as ImageIcon,
+  X, Mail, MessageSquare, Ban, Clock,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   gatekeeper, GatekeeperProfile, GatekeeperBlock, GatekeeperSubscription,
@@ -42,7 +47,14 @@ export default function GatekeeperPage({ params }: { params: Promise<{ username:
   useAuthGuard();
   const { username } = use(params);
   const router = useRouter();
-  const user = getUser();
+
+  const [mounted, setMounted] = useState(false);
+  const [user, setUser] = useState<{ email?: string } | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    setUser(getUser());
+  }, []);
 
   const [profile, setProfile] = useState<GatekeeperProfile | null>(null);
   const [blocks, setBlocks] = useState<GatekeeperBlock[]>([]);
@@ -204,7 +216,7 @@ export default function GatekeeperPage({ params }: { params: Promise<{ username:
         profile={profile}
         username={username}
         onPublish={handlePublish}
-        email={user?.email}
+        email={mounted ? user?.email : undefined}
         unreadCount={unreadCount}
         onInbox={() => setShowInbox(true)}
       />
@@ -339,7 +351,7 @@ function EditableText({
     );
   }
 
-  const Tag = multiline ? 'p' : 'span';
+  const Tag = multiline ? 'div' : 'span';
   return (
     <Tag
       className={`${className} cursor-text hover:bg-emerald-400/10 hover:ring-1 hover:ring-emerald-400/40 rounded px-1 -mx-1 transition-all`}
@@ -364,7 +376,7 @@ function MediaUploadZone({
 
   return (
     <div
-      className={`relative border-2 border-dashed rounded-lg p-4 text-center transition-all cursor-pointer ${className || ''} ${dragOver ? 'border-emerald-400 bg-emerald-400/10' : 'border-zinc-700 hover:border-zinc-600'}`}
+      className={`relative border-2 border-dashed rounded-lg p-4 text-center transition-all cursor-pointer ${className || ''} ${dragOver ? 'border-emerald-400 bg-emerald-400/10' : 'border-zinc-700 bg-zinc-900'}`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {
@@ -454,13 +466,13 @@ function SettingsPanel({
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm text-zinc-400 mb-1.5 block">Display Name</label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.display_name || ''}
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.display_name}
               onChange={(e) => onProfileChange({ ...profile, display_name: e.target.value })}
               onBlur={(e) => saveProfileField({ display_name: e.target.value })} />
           </div>
           <div>
             <label className="text-sm text-zinc-400 mb-1.5 block">URL Slug</label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.slug || ''}
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={profile.slug}
               onChange={(e) => onProfileChange({ ...profile, slug: e.target.value })}
               onBlur={(e) => saveProfileField({ slug: e.target.value })} />
           </div>
@@ -506,7 +518,7 @@ function SettingsPanel({
           <label className="text-sm text-zinc-400 mb-1.5 block">Social Links</label>
           <div className="grid grid-cols-2 gap-2">
             {['twitter', 'youtube', 'discord', 'telegram'].map((key) => (
-              <input key={key} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" placeholder={`${key} URL`}
+              <input key={key} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" placeholder={key}
                 value={socialLinks[key] || ''}
                 onChange={(e) => setSocialLinks({ ...socialLinks, [key]: e.target.value })}
                 onBlur={() => saveProfileField({})} />
@@ -555,12 +567,12 @@ function BlocksPanel({
               <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
                 <div>
                   <label className="text-sm text-zinc-400 mb-1 block">Title</label>
-                  <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.title || ''}
+                  <input className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.title}
                     onChange={(e) => onUpdate(block.id, { title: e.target.value })} />
                 </div>
                 <div>
                   <label className="text-sm text-zinc-400 mb-1 block">Content</label>
-                  <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm min-h-16 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.content || ''}
+                  <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm min-h-16 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.content}
                     onChange={(e) => onUpdate(block.id, { content: e.target.value })} />
                 </div>
                 {(block.block_type === 'image' || block.block_type === 'video' || block.block_type === 'trade_class') && (
@@ -573,7 +585,7 @@ function BlocksPanel({
                 )}
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2 text-sm text-zinc-300">
-                    <input type="number" className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={block.sort_order}
+                    <input type="number" className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/50" defaultValue={String(block.sort_order)}
                       onChange={(e) => onUpdate(block.id, { sort_order: Number(e.target.value) })} /> Order
                   </label>
                   <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
@@ -644,9 +656,9 @@ function EditablePreview({
         <h1 className="text-xl font-bold">
           <EditableText value={profile?.display_name || ''} onSave={(v) => saveProfileField({ display_name: v })} placeholder="Your Name" />
         </h1>
-        <p className="text-sm" style={{ color: primaryColor }}>
-          <EditableText value={profile?.tagline || ''} onSave={(v) => saveProfileField({ tagline: v })} placeholder="Your tagline" />
-        </p>
+        <div className="text-sm" style={{ color: primaryColor }}>
+          <EditableText value={profile?.tagline || ''} onSave={(v) => saveProfileField({ tagline: v })} placeholder="Your tagline" multiline />
+        </div>
         {Object.keys(socialLinks).filter((k) => socialLinks[k]).length > 0 && (
           <div className="flex gap-2 mt-2">
             {Object.keys(socialLinks).filter((k) => socialLinks[k]).map((k) => (
@@ -678,9 +690,9 @@ function EditablePreviewBlock({
           <h3 className="font-bold text-base mb-1">
             <EditableText value={block.title || ''} onSave={(v) => onSave(block.id, { title: v })} placeholder="Hero title" />
           </h3>
-          <p className="text-sm text-zinc-600">
+          <div className="text-sm text-zinc-600">
             <EditableText value={block.content || ''} onSave={(v) => onSave(block.id, { content: v })} placeholder="Hero subtitle" multiline />
-          </p>
+          </div>
         </div>
       );
     case 'stats':
@@ -712,9 +724,9 @@ function EditablePreviewBlock({
             <h4 className="font-semibold text-sm">
               <EditableText value={block.title || ''} onSave={(v) => onSave(block.id, { title: v })} placeholder="Title" />
             </h4>
-            <p className="text-xs text-zinc-500">
+            <div className="text-xs text-zinc-500">
               <EditableText value={block.content || ''} onSave={(v) => onSave(block.id, { content: v })} placeholder="Description" multiline />
-            </p>
+            </div>
           </div>
         </div>
       );
@@ -726,7 +738,7 @@ function EditablePreviewBlock({
           ) : (
             <div className="h-32 bg-zinc-100 flex items-center justify-center"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>
           )}
-          {block.title && <p className="text-xs text-zinc-500 mt-1">{block.title}</p>}
+          {block.title && <div className="text-xs text-zinc-500 mt-1">{block.title}</div>}
         </div>
       );
     case 'cta':
@@ -741,9 +753,9 @@ function EditablePreviewBlock({
           <h4 className="font-semibold text-sm mb-1">
             <EditableText value={block.title || ''} onSave={(v) => onSave(block.id, { title: v })} placeholder="Title" />
           </h4>
-          <p className="text-sm text-zinc-600">
+          <div className="text-sm text-zinc-600">
             <EditableText value={block.content || ''} onSave={(v) => onSave(block.id, { content: v })} placeholder="Content" multiline />
-          </p>
+          </div>
         </div>
       );
   }
@@ -814,6 +826,9 @@ function InboxSidebar({
   onMarkRead: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose} />
@@ -839,7 +854,7 @@ function InboxSidebar({
                     <p className="font-semibold text-sm text-white">{msg.sender_name}</p>
                     <p className="text-xs text-zinc-500">{msg.sender_email}</p>
                   </div>
-                  <span className="text-[10px] text-zinc-600">{new Date(msg.created_at).toLocaleDateString()}</span>
+                  <span className="text-[10px] text-zinc-600">{mounted ? new Date(msg.created_at).toLocaleDateString() : ''}</span>
                 </div>
                 <p className="text-sm text-zinc-300 mb-3">{msg.message}</p>
                 <div className="flex gap-2">
