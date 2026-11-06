@@ -338,9 +338,9 @@ export const gatekeeper = {
       body: formData,
     });
   },
-  getSite: (slug: string) => api<GatekeeperProfileData>(`/gatekeeper/site/${slug}`),
+  getSite: (slug: string) => api<GatekeeperProfileData>(`/gatekeeper/site/${encodeURIComponent(slug)}`),
   sendMessage: (slug: string, data: { sender_name: string; sender_email: string; message: string; page?: string }) =>
-    api<{ success: boolean }>(`/gatekeeper/site/${slug}/message`, {
+    api<{ success: boolean }>(`/gatekeeper/site/${encodeURIComponent(slug)}/message`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

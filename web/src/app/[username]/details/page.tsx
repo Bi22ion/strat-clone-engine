@@ -4,6 +4,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { Video, Play, FileText, TrendingUp, ArrowRight, Clock, ChartBar as BarChart3 } from 'lucide-react';
 import { usePublicSite, parseTheme } from '../usePublicSite';
+import toast from 'react-hot-toast';
 
 export default function DetailsPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
@@ -61,7 +62,15 @@ export default function DetailsPage({ params }: { params: Promise<{ username: st
                   </div>
                   <h3 className="font-bold text-lg mb-2">{block.title || `Trading Session ${i + 1}`}</h3>
                   <p className="text-sm text-zinc-500 mb-4">{block.content || 'A detailed breakdown of my trading approach and methodology.'}</p>
-                  <button className="inline-flex items-center gap-2 text-sm font-semibold transition-colors" style={{ color: primary }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (block.media_url) window.open(block.media_url, '_blank', 'noopener,noreferrer');
+                      else toast('A preview for this session is not available yet.');
+                    }}
+                    className="inline-flex items-center gap-2 text-sm font-semibold transition-colors"
+                    style={{ color: primary }}
+                  >
                     <Play className="w-4 h-4" /> Watch Preview
                   </button>
                 </div>

@@ -29,6 +29,7 @@ export function usePublicSite(username: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     const identifier = String(username || '').trim();
     if (!identifier) {
       setProfile(null);
@@ -42,13 +43,19 @@ export function usePublicSite(username: string) {
     setError(null);
     gatekeeper.getSite(identifier)
       .then((data) => {
+        if (controller.signal.aborted) return;
         setProfile(data.profile);
         setBlocks(data.blocks || []);
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         setError(err?.message || 'Site not found');
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
   }, [username]);
 
   const visibleBlocks = blocks.filter((b) => b.is_visible).sort((a, b) => a.sort_order - b.sort_order);
