@@ -2,7 +2,6 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { Globe, Menu, X } from 'lucide-react';
 import { gatekeeper, GatekeeperProfile, GatekeeperBlock } from '@/lib/api';
 
@@ -39,7 +38,7 @@ export default function PublicSiteLayout({
   }
 
   if (!found || !profile) {
-    notFound();
+    return <PublicSiteUnavailable username={username} />;
   }
 
   const theme = parseTheme(profile);
@@ -63,6 +62,17 @@ export default function PublicSiteLayout({
       <main>{children}</main>
       <PublicFooter profile={profile} blocks={blocks} username={username} primary={theme.primary} />
     </div>
+  );
+}
+
+function PublicSiteUnavailable({ username }: { username: string }) {
+  return (
+    <main className="min-h-[60vh] bg-white px-6 py-24 text-center text-zinc-900">
+      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-600">Public profile</p>
+      <h1 className="mt-4 text-4xl font-bold">Site not found</h1>
+      <p className="mx-auto mt-4 max-w-md text-zinc-500">The profile /{username} is unavailable or has not been published yet.</p>
+      <Link href="/" className="mt-8 inline-flex rounded-lg bg-zinc-900 px-5 py-3 font-semibold text-white transition hover:bg-zinc-700">Return home</Link>
+    </main>
   );
 }
 
@@ -109,7 +119,7 @@ function PublicNav({
           </Link>
         </nav>
 
-        <button className="md:hidden p-2" onClick={() => setMenuOpen(!menuOpen)}>
+        <button type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} className="md:hidden p-2" onClick={() => setMenuOpen(!menuOpen)}>
           {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
